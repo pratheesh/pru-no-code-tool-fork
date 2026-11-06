@@ -653,8 +653,13 @@ function buildDeviceBindings(inst) {
             params = null;
         }
 
-        const clockPin = inst[`gpi${pinNum}_deviceClockPin`];
-        const indexPin = inst[`gpi${pinNum}_deviceIndexPin`];
+        // The EFFECTIVE companion pins (user field, else the bound block's own pin), the
+        // same ones validation and the in-tool simulator use, so a design the GUI accepts
+        // reaches the Python binding with the clock pin it relies on.
+        const kind = inst[`gpi${pinNum}_deviceKind`];
+        const effective = devicePinDefaults(inst, pinNum, kind);
+        const clockPin = effective.clockPin;
+        const indexPin = effective.indexPin;
 
         bindings.push({
             primaryPin: pinNum,
@@ -686,9 +691,8 @@ function buildDeviceBindings(inst) {
  * conflict check. Returns [{pinNum, kind, pins: [{pin, label}]}].
  * Uses the EFFECTIVE companion pins (devicePinDefaults), the same pins the
  * device would really be wired to, not just the raw fields.
- * BuildDeviceBindings emits the RAW fields (an unset companion pin is null in the
- * manifest); this check claims the effective pin on purpose - the device is wired there either
- * way, so a Device Model on that pin is a real short even though the manifest omits it.
+ * buildDeviceBindings emits the same effective pins, so the manifest and this check agree on
+ * where the device is wired.
  */
 function collectGpiDeviceClaims(inst) {
     const claims = [];
