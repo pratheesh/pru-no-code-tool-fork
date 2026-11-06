@@ -13,6 +13,7 @@
  * Usage:
  *   node scripts/block_validate_runner.js <blockPath> '<instJson>'
  *   node scripts/block_validate_runner.js --block <blockPath> --inst '<instJson>'
+ *   node scripts/block_validate_runner.js <blockPath> --inst-file <instance.json>
  *   node scripts/block_validate_runner.js --sweep
  *   node scripts/block_validate_runner.js --report
  *
@@ -277,9 +278,11 @@ function main() {
     // Parse --block / --inst or positional
     let blockPath = null;
     let instJson = null;
+    let instFile = null;
     for (let i = 0; i < args.length; i++) {
         if (args[i] === '--block' && i + 1 < args.length) blockPath = args[++i];
         else if (args[i] === '--inst' && i + 1 < args.length) instJson = args[++i];
+        else if (args[i] === '--inst-file' && i + 1 < args.length) instFile = args[++i];
         else if (!blockPath) blockPath = args[i];
         else if (!instJson) instJson = args[i];
     }
@@ -294,10 +297,11 @@ function main() {
             console.error(`Invalid inst JSON: ${e.message}`);
             process.exit(2);
         }
-    } else if (args.includes('--inst-file')) {
-        const idx = args.indexOf('--inst-file');
-        const fp = args[idx + 1];
-        inst = JSON.parse(fs.readFileSync(fp, 'utf8'));
+    } else if (instFile) {
+        try { inst = JSON.parse(fs.readFileSync(instFile, 'utf8')); } catch (e) {
+            console.error(`Cannot read inst file ${instFile}: ${e.message}`);
+            process.exit(2);
+        }
     }
     const result = runValidate(blockPath, inst);
     // Emit structured errors and exit 0 so the caller can inspect errors vs a clean result
