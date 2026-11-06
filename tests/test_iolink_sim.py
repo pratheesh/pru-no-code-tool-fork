@@ -39,9 +39,9 @@ const m=loadBlockModule('iolink_master_block','application_specific');
 const t=m.getMacro('','m_iolink_master_pru'+process.argv[1]);
 process.stdout.write(t.split(/^m_iolink\S+ \.macro.*$/m)[0]);"""
 
-DEFAULT_ARGS = dict(RES="R10", DATA_IN_LO="R2", DATA_IN_HI="R3", DIR_PIN="2", WAKE_PIN="3",
+DEFAULT_ARGS = dict(RES="R10", STATUS="R11", DATA_IN_LO="R2", DATA_IN_HI="R3", DIR_PIN="2", WAKE_PIN="3",
                     CHANNEL="0", CLK_DIV="832", TX_BYTES="1", RX_BYTES="0", TURN_BITS="5",
-                    WAKE_LPS="6400", PREAMBLE="0")
+                    WAKE_LPS="6400", PREAMBLE="0", RX_CLK_DIV="103")
 
 
 class Run:
@@ -144,3 +144,135 @@ def test_characters_leave_the_selected_endat_channel(channel):
     r = run_macro("pru0", lo=0x5A, CHANNEL=str(channel))
     assert tx_characters(r.channel(index=channel)) == [expected_char(0x5A)]
     assert not drive_windows(r.channel(index=0))
+
+
+class Device:
+    """Drives a channel's RX input like an IO-Link device at COM3 (230.4 kbit/s).
+
+    The line idles high.  ``gap_bits`` bit times after the master's last character has been
+    sent, the device answers with one 11-bit character per response byte, back to back.
+    ``bad_parity`` / ``bad_stop`` list the response indexes sent with a wrong parity / stop bit.
+    """
+
+    def __init__(self, response, gap_bits=6, baud=230400, bad_parity=(), bad_stop=(), channel=0):
+        bits = []
+        for i, byte in enumerate(response):
+            ch = expected_char(byte)
+            if i in bad_parity:
+                ch[9] ^= 1
+            if i in bad_stop:
+                ch[10] = 0
+            bits += ch
+        self.bits, self.gap_bits, self.bit_ns, self.index = bits, gap_bits, 1e9 / baud, channel
+
+    def __call__(self, sim, core):
+        channel = sim._perif[core].channels[self.index]
+        channel.rx_line_source = lambda t: self.level(channel, t)
+
+    def level(self, channel, t):
+        edges = channel.tx_out_en_transitions
+        if not edges or edges[-1][1]:       # the master has not finished sending
+            return 1
+        start = edges[-1][0] + self.gap_bits * self.bit_ns
+        k = int((t - start) // self.bit_ns) if t >= start else -1
+        return self.bits[k] if 0 <= k < len(self.bits) else 1
+
+
+def receive(core="pru0", response=(0xA5,), device_kw=None, **args):
+    kw = dict(device_kw or {})
+    r = run_macro(core, RX_BYTES=str(len(response)), device=Device(response, **kw), **args)
+    assert r.halted, "the macro did not finish (receive loop waiting for samples)"
+    return r.regs[10], r.regs[11]
+
+
+@pytest.mark.parametrize("core", ["pru0", "pru1"])
+@pytest.mark.parametrize("response", [(0xA5,), (0x00,), (0xFF,), (0x81, 0x7E), (0x12, 0x34, 0x56, 0x78)])
+def test_response_bytes_are_returned_with_the_first_byte_most_significant(core, response):
+    res, status = receive(core, response)
+    assert res == int.from_bytes(bytes(response), "big")
+    assert status == 0
+
+
+@pytest.mark.parametrize("channel", [1, 2])
+def test_response_is_read_from_the_selected_channel(channel):
+    res, status = receive(response=(0xC3, 0x3C), CHANNEL=str(channel), device_kw=dict(channel=channel))
+    assert (res, status) == (0xC33C, 0)
+
+
+def test_wrong_parity_is_reported_in_status_bit_0():
+    res, status = receive(response=(0x11, 0x22), device_kw=dict(bad_parity=(1,)))
+    assert res == 0x1122 and status == 1
+
+
+def test_wrong_stop_bit_is_reported_in_status_bit_1():
+    res, status = receive(response=(0x11, 0x22), device_kw=dict(bad_stop=(0,)))
+    assert res == 0x1122 and status == 2
+
+
+def test_response_with_two_gap_bits_between_the_master_and_the_device_is_still_read():
+    res, status = receive(response=(0x3C,), device_kw=dict(gap_bits=5))
+    assert (res, status) == (0x3C, 0)
+
+
+# --- SysConfig generation: the generated call matches the macro and the firmware assembles ---
+TI_TOOLS = Path(os.environ.get("TOOLS_PATH", (os.environ.get("SystemDrive", "C:") + "/ti") if os.name == "nt" else Path.home() / "ti"))
+SYSCONFIG_NODE = Path(os.environ.get("SYSCONFIG_NODE", str(TI_TOOLS / "sysconfig_1.28.0" / "nodejs" / "node.exe")))
+SYSCONFIG_CLI = Path(os.environ.get("SYSCONFIG_CLI", str(TI_TOOLS / "sysconfig_1.28.0" / "dist" / "cli.js")))
+PRODUCT = ROOT / ".metadata" / "product.json"
+
+SYSCFG = """\
+// @cliArgs --device AM243x_ALX_beta --package ALX --part ALX --context icss_g0_{core} --product PRU_NO_CODE_TOOL@01.00.01
+const common = scripting.addModule("/pru_blocks/common/pru_blocks_static_module", {{}}, false);
+const lc = scripting.addModule("/pru_blocks/data_handling/load_constant_block", {{}}, false);
+const m = scripting.addModule("/pru_blocks/application_specific/iolink_master_block", {{}}, false);
+const lo = lc.addInstance(); lo.$name = "LO"; lo.constant1 = 0x11223344;
+const hi = lc.addInstance(); hi.$name = "HI"; hi.constant1 = 0x55667788;
+const inst = m.addInstance();
+inst.$name = "BLOCK_0";
+scripting.connect(lo, "output1", inst, "input1");
+scripting.connect(hi, "output1", inst, "input2");
+scripting.connect(lo, "next", hi, "prev");
+scripting.connect(hi, "next", inst, "prev");
+"""
+
+MAIN_ASM = """\
+    .retain
+    .retainrefs
+    .global     main
+    .ref        sysconfig_generated_start
+    .sect       ".text:main"
+main:
+    jmp     sysconfig_generated_start
+    .global sysconfig_generated_end
+sysconfig_generated_end:
+    halt
+"""
+
+
+@pytest.mark.skipif(not (SYSCONFIG_NODE.exists() and SYSCONFIG_CLI.exists()), reason="SysConfig CLI missing")
+@pytest.mark.parametrize("core", ["pru0", "pru1"])
+def test_generated_design_calls_the_macro_of_its_core_and_assembles(core, tmp_path):
+    script = tmp_path / "iolink.syscfg"
+    script.write_text(SYSCFG.format(core=core), encoding="utf-8")
+    out = tmp_path / "out"
+    r = subprocess.run(
+        [str(SYSCONFIG_NODE), str(SYSCONFIG_CLI), "--product", str(PRODUCT), "--device", "AM243x_ALX_beta",
+         "--package", "ALX", "--part", "ALX", "--script", str(script), "--context", "icss_g0_" + core,
+         "--output", str(out)], cwd=ROOT, text=True, capture_output=True)
+    assert r.returncode == 0 and "Generating Code" in r.stdout, r.stdout + r.stderr
+    assert "Macro arity mismatch" not in r.stdout + r.stderr
+    asm = (out / "pru_syscfg.asm").read_text(encoding="utf-8", errors="replace")
+    inc = (out / "pru_syscfg.inc").read_text(encoding="utf-8", errors="replace")
+    name = "m_iolink_master_" + core
+    calls = [ln.split(";")[0].split() for ln in asm.splitlines() if ln.split(";")[0].split()[:1] == [name]]
+    assert len(calls) == 1, calls
+    args = [a.strip() for a in " ".join(calls[0][1:]).split(",")]
+    header = next(ln for ln in inc.splitlines() if ln.startswith(name + " .macro"))
+    assert len(args) == len(header.split(".macro")[1].split(",")) == 14, (args, header)
+    (out / "main.asm").write_text(MAIN_ASM, encoding="utf-8")
+    (out / "link.cmd").write_text(elf_cosim.LINKER_CMD, encoding="utf-8")
+    for cmd in (["--silicon_version=4", "-c", "-I.", "pru_syscfg.asm", "main.asm"],
+                ["--silicon_version=4", "-z", "pru_syscfg.obj", "main.obj", "link.cmd", "--entry_point=main",
+                 "-o", "main.out"]):
+        c = subprocess.run([elf_cosim.find_clpru()] + cmd, cwd=out, text=True, capture_output=True)
+        assert c.returncode == 0 and "warning" not in (c.stdout + c.stderr).lower(), c.stdout + c.stderr
