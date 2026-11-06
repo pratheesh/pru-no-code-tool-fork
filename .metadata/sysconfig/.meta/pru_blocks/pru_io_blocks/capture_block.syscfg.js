@@ -39,7 +39,7 @@ const captureModule = {
         { name: "$topLabel", hidden: true, default: "" },
 
         { name: "measurementType", displayName: "Measurement Type", default: "pulseWidth", options: [{name:"pulseWidth"}, {name:"frequency"}, {name:"timeBetweenEdges"}] },
-        { name: "triggerSource", displayName: "Trigger Source", default: "iep", options: [{name:"iep"}, {name:"gpio"}, {name:"internal"}] },
+        { name: "triggerSource", displayName: "Trigger Source", default: "iep", options: [{name:"iep"}, {name:"gpio"}] },
         { name: "pin", displayName: "Target Pin (R31)", default: "5", options: GPIO_SIGNALS },
         { name: "dataRegister", displayName: "Output Register (32-bit)", default: "R4" },
         { name: "clkHz", displayName: "PRU/IEP Clock (Hz)", default: 200000000 },

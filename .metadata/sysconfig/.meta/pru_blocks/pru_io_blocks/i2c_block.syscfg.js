@@ -20,6 +20,13 @@ const GPIO_SIGNALS = Array.from({ length: 20 }, (_, i) => ({
     name: String(i), displayName: `PRU GPIO ${i} (R30/R31.${i})`,
 }));
 
+// addr7 is typed as hex ("0x50" or "50"); a value that is not hex falls back to decimal.
+function parseAddr7(text) {
+    let addr = parseInt(text, 16);
+    if (isNaN(addr)) addr = parseInt(text);
+    return addr;
+}
+
 const i2cModule = {
     displayName: "I2C master (open-drain)",
     defaultInstanceName: `${PRU_USED}_I2C_INSTANCE_`,
@@ -62,9 +69,7 @@ const i2cModule = {
             return Math.max(1, Math.ceil(halfCycles / 2) + 4);
         }},
         { name: "constant4", hidden: true, default: 0, getValue: (inst) => {
-            let addr = parseInt(inst.addr7, 16);
-            if (isNaN(addr)) addr = parseInt(inst.addr7);
-            return (addr << 1) | (inst.rw === 'read' ? 1 : 0);
+            return (parseAddr7(inst.addr7) << 1) | (inst.rw === 'read' ? 1 : 0);
         }},
         { name: "constant5", hidden: true, default: 0, getValue: (inst) => inst.rw === "read" ? 1 : 0 },
         { name: "constant6", hidden: true, default: "", getValue: (inst) => inst.dataRegister },
@@ -103,6 +108,8 @@ const i2cModule = {
 
     validate(inst, validation) {
         if (inst.sclBit === inst.sdaBit) validation.logError("sclBit and sdaBit must differ", inst, "sclBit");
+        const addr = parseAddr7(inst.addr7);
+        if (isNaN(addr) || addr < 0 || addr > 0x7F) validation.logError("addr7 must be a 7-bit address (0x00 to 0x7F)", inst, "addr7");
     },
 
     getMacro(pruInstructionMacro, opCode) {

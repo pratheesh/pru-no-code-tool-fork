@@ -93,7 +93,7 @@ const stepperModule = {
         if (inst.maxSpeedSps <= 0) validation.logError("maxSpeedSps must be > 0", inst, "maxSpeedSps");
         if (inst.maxSpeedSps > 0 && requestedPeriodCycles(inst) < MIN_STEPPER_PERIOD_CYCLES)
             validation.logError(`maxSpeedSps requires a period of at least ${MIN_STEPPER_PERIOD_CYCLES} PRU cycles (maxSpeedSps <= clkHz / ${MIN_STEPPER_PERIOD_CYCLES})`, inst, "maxSpeedSps");
-        if (inst.numSteps <= 0) validation.logError("numSteps must be > 0", inst, "numSteps");
+        if (!Number.isInteger(inst.numSteps) || inst.numSteps < 1 || inst.numSteps > 65535) validation.logError("numSteps must be a whole number from 1 to 65535 (the step counter is a 16-bit register)", inst, "numSteps");
         if (inst.clkHz <= 0) validation.logError("clkHz must be > 0", inst, "clkHz");
     },
 

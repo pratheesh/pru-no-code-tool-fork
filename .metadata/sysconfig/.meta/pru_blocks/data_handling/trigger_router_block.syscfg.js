@@ -63,10 +63,10 @@ no_route_4?:
     .endif
 
     ; Short delay between polling checks
-    ldi   R0, 100
+    ldi   TEMP_REG1, 100
 evaluation_delay?:
-    sub   R0, R0, 1
-    qbne  evaluation_delay?, R0, 0
+    sub   TEMP_REG1, TEMP_REG1, 1
+    qbne  evaluation_delay?, TEMP_REG1, 0
     qba   trigger_router_loop?
 `;
 

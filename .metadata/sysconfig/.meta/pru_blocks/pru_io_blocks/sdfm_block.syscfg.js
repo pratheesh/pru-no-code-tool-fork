@@ -12,7 +12,6 @@ const sdfmModule = {
         { name: "$topLabel", hidden: true, default: "" },
 
         { name: "filterChannel", displayName: "Filter Channel", default: 0, options: [{name: 0}, {name: 1}, {name: 2}, {name: 3}] },
-        { name: "osr", displayName: "Over Sampling Ratio (OSR)", default: 64 },
 
         { name: "opCode", default: "m_sdfm_read", hidden: true },
         { name: "numOfInputPorts", default: 0, hidden: true },

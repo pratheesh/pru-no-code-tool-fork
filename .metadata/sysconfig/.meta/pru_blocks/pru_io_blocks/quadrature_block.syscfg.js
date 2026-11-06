@@ -70,7 +70,7 @@ const quadratureModule = {
         if (inst.aBit === inst.bBit || inst.aBit === inst.zBit || inst.bBit === inst.zBit) {
             validation.logError("aBit, bBit, and zBit must differ", inst, "aBit");
         }
-        if (inst.sampleCycles < 1) validation.logError("sampleCycles must be >= 1", inst, "sampleCycles");
+        if (!Number.isInteger(inst.sampleCycles) || inst.sampleCycles < 1 || inst.sampleCycles > 65535) validation.logError("sampleCycles must be a whole number from 1 to 65535 (the delay counter is a 16-bit register)", inst, "sampleCycles");
     },
 
     getMacro(pruInstructionMacro, opCode) {

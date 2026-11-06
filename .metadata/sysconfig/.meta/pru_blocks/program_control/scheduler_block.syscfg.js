@@ -1,6 +1,11 @@
 function validate(inst, report) {
     if (inst.contextSwitchOverhead < 0) report.logError("contextSwitchOverhead must be >= 0", inst, "contextSwitchOverhead");
-    if (inst.task1_id !== 255 && (inst.task1_id < 0 || inst.task1_id > 31)) report.logError("task1_id must be 0..31 or 255", inst, "task1_id");
+    for (const field of ["task1_id", "task2_id", "task3_id", "task4_id"]) {
+        if (inst[field] !== 255 && (inst[field] < 0 || inst[field] > 31)) report.logError(field + " must be 0..31 or 255", inst, field);
+    }
+    if (inst.timerSource !== "iep") {
+        report.logError("timerSource " + inst.timerSource + " is not supported: the scheduler reads the IEP counter", inst, "timerSource");
+    }
 }
 
 function getMacro(pruInstructionMacro, opCode) {

@@ -33,7 +33,7 @@ const encoderSpeedModule = {
 
         { name: "aBit", displayName: "A Input R31 Pin", default: "3", options: GPIO_SIGNALS },
         { name: "bBit", displayName: "B Input R31 Pin", default: "4", options: GPIO_SIGNALS },
-        { name: "velocityMethod", displayName: "Velocity Method", default: "iep", options: [{name:"iep"}, {name:"pulse-count"}] },
+        { name: "velocityMethod", displayName: "Velocity Method", default: "iep", options: [{name:"iep"}] },
 
         { name: "posRegister", displayName: "Position Register (32-bit)", default: "R4" },
         { name: "velRegister", displayName: "Velocity Register (32-bit)", default: "R5" },

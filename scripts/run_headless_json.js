@@ -148,10 +148,12 @@ function main() {
     instructions.push(...opts.inline);
   }
 
-  if (instructions.length === 0 && !opts.elf) {
+  // --elf only supplies data and symbols; the simulator executes assembly text, so an ELF alone cannot run.
+  if (instructions.length === 0) {
     console.error(JSON.stringify({
       status: 'error',
-      error: 'No instructions provided. Use --instructions <file> or --inline <instr>.'
+      error: 'No instructions provided. Use --instructions <file> or --inline <instr>' +
+        (opts.elf ? ' (--elf supplies data and symbols only and cannot be executed on its own).' : '.')
     }));
     process.exit(1);
   }
