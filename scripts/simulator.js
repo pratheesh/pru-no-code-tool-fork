@@ -319,7 +319,7 @@ function loadElfFirmware(buffer) {
           }
         }
         for (let s = 0; s < numSyms; s++) {
-          const symOff = s * 16;
+          const symOff = sh_offset + s * 16;   // symbols live in the .symtab section
           const st_name = readU32(symOff);
           const st_value = readU32(symOff + 4);
           const st_size = readU32(symOff + 8);
