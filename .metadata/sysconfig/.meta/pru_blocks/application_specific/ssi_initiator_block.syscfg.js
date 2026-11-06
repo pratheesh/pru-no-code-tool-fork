@@ -63,9 +63,11 @@ const ssiModule = {
         if (inst.totalWidth < 8 || inst.totalWidth > 32) validation.logError("totalWidth must be 8..32", inst, "totalWidth");
         if (inst.singleTurnBits < 1 || inst.singleTurnBits > 32) validation.logError("singleTurnBits must be 1..32", inst, "singleTurnBits");
         if (inst.multiTurnBits < 0 || inst.multiTurnBits > 32) validation.logError("multiTurnBits must be 0..32", inst, "multiTurnBits");
-        if ((inst.singleTurnBits + inst.multiTurnBits) > inst.totalWidth) {
-            // allow parity/error bits to consume remainder; just ensure ST+MT <= total
-            if ((inst.singleTurnBits + inst.multiTurnBits) > inst.totalWidth) validation.logError("singleTurnBits + multiTurnBits must be <= totalWidth", inst, "singleTurnBits");
+        // The frame is [payload | error bit | parity bit]; an enabled error or parity bit takes one of the totalWidth bits.
+        const statusBits = (inst.parityEnable ? 1 : 0) + (inst.errorBitEnable ? 1 : 0);
+        if ((inst.singleTurnBits + inst.multiTurnBits) > inst.totalWidth - statusBits) {
+            validation.logError("singleTurnBits + multiTurnBits must be <= totalWidth minus the enabled parity and error bits (" +
+                (inst.totalWidth - statusBits) + " payload bits available)", inst, "singleTurnBits");
         }
         if (inst.clkPin === inst.dataPin) validation.logError("clkPin and dataPin must differ", inst, "clkPin");
         if (inst.clkPin < 0 || inst.clkPin > 15) validation.logError("clkPin must be 0..15", inst, "clkPin");
