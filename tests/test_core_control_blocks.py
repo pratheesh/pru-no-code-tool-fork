@@ -145,3 +145,24 @@ def test_iep_macro_uses_only_the_temporary_registers():
         body = iep_body(func, n)
         used = {m for l in body for m in re.findall(r"\bR\d+\b", l)}
         assert used <= {"R28", "R29"}, used
+
+
+# ------------------------------------------------------------ scheduler_block
+
+SCHED = "program_control/scheduler_block"
+SCHED_BASE = {"timerSource": "iep", "contextSwitchOverhead": 10,
+              "task1_id": 0, "task2_id": 1, "task3_id": 255, "task4_id": 255}
+
+
+def test_scheduler_refuses_external_timer_source():
+    assert validate(SCHED, SCHED_BASE)["errors"] == []
+    red = validate(SCHED, {**SCHED_BASE, "timerSource": "external"})
+    assert [e["field"] for e in red["errors"]] == ["timerSource"]
+
+
+def test_scheduler_validates_every_task_id():
+    for field in ("task1_id", "task2_id", "task3_id", "task4_id"):
+        for bad in (32, -1):
+            red = validate(SCHED, {**SCHED_BASE, field: bad})
+            assert [e["field"] for e in red["errors"]] == [field], (field, bad, red)
+        assert validate(SCHED, {**SCHED_BASE, field: 31})["errors"] == []
