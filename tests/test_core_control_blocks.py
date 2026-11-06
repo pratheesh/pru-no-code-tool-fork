@@ -105,3 +105,43 @@ def test_event_signal_value_is_valid_strobe_plus_channel():
         ldi = [l for l in body if l.startswith("ldi   R31.b0")]
         assert ldi == [f"ldi   R31.b0, {event} + 16"], body
         assert (event + 16) == 0x20 | (event - 16)
+
+
+# ------------------------------------------------------------ iep_block
+
+IEP = "utils/iep_block"
+IEP_BASE = {"func": "oneshot", "clkHz": 200000000, "periodNs": 5000, "cmpIndex": 0}
+
+
+def iep_body(func, cmp_index, auto_reset=1):
+    return code(expand_macro("iep_block", {"func": func, "counts": 1000, "cmpIndex": cmp_index, "autoReset": auto_reset}))
+
+
+def test_iep_capture_is_refused():
+    assert validate(IEP, IEP_BASE)["errors"] == []
+    red = validate(IEP, {**IEP_BASE, "func": "capture"})
+    assert [e["field"] for e in red["errors"]] == ["func"]
+
+
+def test_iep_nonzero_compare_uses_its_own_register_enable_and_status_bit():
+    for n in (1, 3, 15):
+        body = iep_body(1, n)
+        assert f"sbco  &R29, CONST_IEP, IEP_CMP0 + (4 * {n}), 4" in body, body
+        assert f"ldi32 R28, (0x02 << {n})" in body, body
+        waits = [l for l in body if l.startswith("qbbc")]
+        assert len(waits) == 1 and waits[0].endswith(f"R29, {n}"), waits
+        clears = [l for l in body if l == f"ldi32 R28, (1 << {n})"]
+        assert len(clears) == 2, body  # status clear before the wait and again after it
+
+
+def test_iep_compare_zero_keeps_periodic_and_oneshot_enables():
+    assert "ldi32 R28, 0x03" in iep_body(0, 0, 1)
+    assert "ldi32 R28, (0x02 << 0)" in iep_body(0, 0, 0)
+    assert "ldi32 R28, (0x02 << 0)" in iep_body(1, 0, 1)
+
+
+def test_iep_macro_uses_only_the_temporary_registers():
+    for func, n in ((0, 0), (1, 5)):
+        body = iep_body(func, n)
+        used = {m for l in body for m in re.findall(r"\bR\d+\b", l)}
+        assert used <= {"R28", "R29"}, used

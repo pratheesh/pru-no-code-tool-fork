@@ -2,6 +2,9 @@ function validate(inst, report) {
     if (inst.clkHz <= 0) report.logError("clkHz must be > 0", inst, "clkHz");
     if (inst.periodNs <= 0) report.logError("periodNs must be > 0", inst, "periodNs");
     if (inst.cmpIndex < 0 || inst.cmpIndex > 15) report.logError("cmpIndex must be 0..15", inst, "cmpIndex");
+    if (inst.func === 'capture') {
+        report.logError("capture is not implemented; use periodic or oneshot", inst, "func");
+    }
     if (inst.func === 'periodic' && inst.cmpIndex !== 0) {
         report.logError("periodic auto-reset requires cmpIndex 0", inst, "cmpIndex");
     }
@@ -27,37 +30,33 @@ function getMacro(pruInstructionMacro, opCode) {
     .asg 0x00, IEP_GLOBAL_CFG
     .asg 0x70, IEP_CMP_CFG
     .asg 0x74, IEP_CMP_STATUS
-    .asg 0x78, IEP_CMP0
+    .asg 0x78, IEP_CMP0 ; CMP0; CMPn is at IEP_CMP0 + 4 * n
     .asg 0x11, INCR_1_ENABLE
     .asg c26, CONST_IEP
 
-    .if (${func} != 2) ; Not capture
+    ; Scratch: TEMP_REG1/TEMP_REG2 only. The compare index selects the compare register (IEP_CMP0 + 4 * n) for compare n,
+    ; its enable bit in IEP_CMP_CFG (bit n + 1; bit 0 is CMP0_RST_CNT_EN) and its status bit.
 iep_init?:
-    ldi   R0, INCR_1_ENABLE
-    sbco  &R0, CONST_IEP, IEP_GLOBAL_CFG, 4
-    ldi32 R2, ${counts}
-    sbco  &R2, CONST_IEP, IEP_CMP0, 4
+    ldi   TEMP_REG1, INCR_1_ENABLE
+    sbco  &TEMP_REG1, CONST_IEP, IEP_GLOBAL_CFG, 4
+    ldi32 TEMP_REG2, ${counts}
+    sbco  &TEMP_REG2, CONST_IEP, IEP_CMP0 + (4 * ${cmpIndex}), 4
 
-    .if (${func} == 0)
-        .if (${autoReset} == 1)
-            ldi   R0, 0x03 ; periodic CMP0 en+reset
-        .else
-            ldi   R0, 0x02 ; oneshot: CMP_EN[0] only (bit 0 is CMP0_RST_CNT_EN)
-        .endif
+    .if ((${func} == 0) & (${autoReset} == 1))
+    ldi32 TEMP_REG1, 0x03 ; periodic CMP0 en+reset
     .else
-        ldi   R0, 0x02 ; oneshot: CMP_EN[0] only (bit 0 is CMP0_RST_CNT_EN)
+    ldi32 TEMP_REG1, (0x02 << ${cmpIndex}) ; only the selected compare is enabled
     .endif
-    sbco  &R0, CONST_IEP, IEP_CMP_CFG, 4
-    ldi   R0, 1
-    sbco  &R0, CONST_IEP, IEP_CMP_STATUS, 4
+    sbco  &TEMP_REG1, CONST_IEP, IEP_CMP_CFG, 4
+    ldi32 TEMP_REG1, (1 << ${cmpIndex})
+    sbco  &TEMP_REG1, CONST_IEP, IEP_CMP_STATUS, 4
 
 iep_wait_cmp?:
 wait_loop?:
-    lbco  &R1, CONST_IEP, IEP_CMP_STATUS, 4
-    qbbc  wait_loop?, R1, ${cmpIndex}
-    ldi   R0, 1
-    sbco  &R0, CONST_IEP, IEP_CMP_STATUS, 4
-    .endif
+    lbco  &TEMP_REG2, CONST_IEP, IEP_CMP_STATUS, 4
+    qbbc  wait_loop?, TEMP_REG2, ${cmpIndex}
+    ldi32 TEMP_REG1, (1 << ${cmpIndex})
+    sbco  &TEMP_REG1, CONST_IEP, IEP_CMP_STATUS, 4
 `;
 
     if(pruInstructionMacro == "") {
