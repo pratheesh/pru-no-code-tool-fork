@@ -166,3 +166,13 @@ def test_scheduler_validates_every_task_id():
             red = validate(SCHED, {**SCHED_BASE, field: bad})
             assert [e["field"] for e in red["errors"]] == [field], (field, bad, red)
         assert validate(SCHED, {**SCHED_BASE, field: 31})["errors"] == []
+
+
+# ------------------------------------------------------------ trigger_router_block
+
+def test_trigger_router_delay_uses_a_temporary_register():
+    for routes in ((255, 255, 255, 255), (5, 6, 255, 255)):
+        args = dict(zip(("route1", "route2", "route3", "route4"), routes))
+        body = code(expand_macro("trigger_router_block", args))
+        used = {m for l in body for m in re.findall(r"\bR\d+\b", l)}
+        assert used <= {"R28", "R29", "R31"}, (routes, used)
