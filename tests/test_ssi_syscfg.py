@@ -7,9 +7,9 @@ order.  The right COUNT in the wrong ORDER binds TOTAL_WIDTH to 0 (a 256-iterati
 loop that never halts), and a test that looks for the frame in ANY of 32 registers
 cannot tell.  This test:
 
-  * reads the RES register out of the generated ``m_ssi_read`` call (never
-    hard-coded), decodes ST/MT from that register and compares them with the
-    model's position;
+  * reads the RES and STATUS registers out of the generated ``m_ssi_read`` call
+    (never hard-coded), decodes ST/MT from RES and compares them with the
+    model's position, and reads the parity/error status from STATUS;
   * asserts the generated call's positional constants against the macro's
     parameter names;
   * carries red arms: two constants swapped in the generated call, and a model
@@ -39,7 +39,7 @@ SYSCONFIG_CLI = Path(os.environ.get("SYSCONFIG_CLI", str(TI_TOOLS / "sysconfig_1
 PRODUCT = ROOT / ".metadata" / "product.json"
 
 # Macro parameter order of m_ssi_read (ssi_initiator_block.syscfg.js getMacro).
-MACRO_PARAMS = ["RES", "TOTAL_WIDTH", "ST_BITS", "MT_BITS", "CLK_PIN", "DATA_PIN", "CPOL",
+MACRO_PARAMS = ["RES", "STATUS", "TOTAL_WIDTH", "ST_BITS", "MT_BITS", "CLK_PIN", "DATA_PIN", "CPOL",
                 "HALF_PERIOD", "MONO_CYCLES", "PARITY_EN", "PARITY_TYPE", "ERR_EN",
                 "GRAY_EN", "TIMEOUT_CYCLES"]
 
@@ -149,22 +149,32 @@ CALL_RE = re.compile(r"^[ \t]*m_ssi_read[ \t]+(.*?)[ \t]*$", re.M)
 
 def parse_call(out):
     """(RES register index, [constants as strings]) from the generated m_ssi_read call."""
+    res, _status, consts = parse_call_regs(out)
+    return res, consts
+
+
+def parse_call_regs(out):
+    """(RES register index, STATUS register index, [constants]) from the generated m_ssi_read call."""
     asm = (out / "pru_syscfg.asm").read_text(encoding="utf-8", errors="replace")
     calls = CALL_RE.findall(asm)
     assert len(calls) == 1, "expected one m_ssi_read call, found %r" % calls
     args = [a.strip() for a in calls[0].split(";")[0].split(",")]
     assert len(args) == len(MACRO_PARAMS), \
         "m_ssi_read call has %d args, macro has %d: %s" % (len(args), len(MACRO_PARAMS), calls[0])
-    m = re.fullmatch(r"R(\d+)", args[0])
-    assert m, "RES argument %r is not a whole 32-bit register" % args[0]
-    return int(m.group(1)), args[1:]
+    regs = []
+    for name, arg in zip(("RES", "STATUS"), args[:2]):
+        m = re.fullmatch(r"R(\d+)", arg)
+        assert m, "%s argument %r is not a whole 32-bit register" % (name, arg)
+        regs.append(int(m.group(1)))
+    assert regs[0] != regs[1], "RES and STATUS share a register: %r" % args[:2]
+    return regs[0], regs[1], args[2:]
 
 
 def rewrite_call(out, new_consts):
     asm_path = out / "pru_syscfg.asm"
     asm = asm_path.read_text(encoding="utf-8", errors="replace")
-    res = parse_call(out)[0]
-    new = "    m_ssi_read R%d, %s" % (res, " , ".join(str(c) for c in new_consts))
+    res, status, _ = parse_call_regs(out)
+    new = "    m_ssi_read R%d, R%d, %s" % (res, status, " , ".join(str(c) for c in new_consts))
     asm_path.write_text(CALL_RE.sub(lambda _m: new, asm, count=1), encoding="utf-8")
 
 
@@ -242,21 +252,34 @@ def test_generated_call_passes_config_in_macro_order(built):
     case, out, _ = built
     _, consts = parse_call(out)
     want = expected_consts(case)
-    bad = [(p, got, w) for p, got, w in zip(MACRO_PARAMS[1:], consts, want) if got != w]
+    bad = [(p, got, w) for p, got, w in zip(MACRO_PARAMS[2:], consts, want) if got != w]
     assert not bad, "constant order/value mismatch (param, got, want): %r" % bad
 
 
 def test_generated_firmware_decodes_the_model_position(built):
     case, out, elf = built
-    res_reg, _ = parse_call(out)
+    res_reg, status_reg, _ = parse_call_regs(out)
     r, m = run_elf(elf, case["model"])
     text = decode_mismatch(r, res_reg, case)
     assert text is None, text
     assert m.faults() == case["faults"], m.faults()
-    mm = case["model"]
-    if mm["parity_enable"] or mm["error_bit_enable"]:
-        # TEMP_REG2.b0 (R29) is the macro's status byte: 0 = parity and error bit ok.
-        assert r.registers[29] & 0xFF == 0, "macro status byte 0x%x" % (r.registers[29] & 0xFF)
+    # STATUS is the block's second output: 0 = parity and error bit ok (and 0 when neither is checked).
+    assert r.registers[status_reg] == 0, "STATUS R%d = 0x%x" % (status_reg, r.registers[status_reg])
+
+
+@pytest.mark.parametrize("fault, status", [
+    (dict(force_bad_parity=True), 1),
+    (dict(error_flag=True), 4),
+    (dict(force_bad_parity=True, error_flag=True), 5),
+])
+def test_parity_and_error_bit_failures_reach_the_status_output(tmp_path_factory, fault, status):
+    """A bad parity bit / an active error flag from the encoder must be readable in STATUS."""
+    case = CASES["all_fields_moved"]
+    out = generate(tmp_path_factory.mktemp("ssi_status"), case["inst"])
+    _, status_reg, _ = parse_call_regs(out)
+    r, _ = run_elf(build(out), dict(case["model"], **fault))
+    assert r.halted
+    assert r.registers[status_reg] == status, "STATUS R%d = 0x%x, want 0x%x" % (status_reg, r.registers[status_reg], status)
 
 
 @pytest.mark.parametrize("swap", [("TOTAL_WIDTH", "HALF_PERIOD"), ("CLK_PIN", "DATA_PIN")])
@@ -266,7 +289,7 @@ def test_red_arm_two_constants_swapped(built, tmp_path, swap):
     bad = tmp_path / "bad"
     shutil.copytree(out, bad)
     res_reg, consts = parse_call(bad)
-    i, j = (MACRO_PARAMS[1:].index(n) for n in swap)
+    i, j = (MACRO_PARAMS[2:].index(n) for n in swap)
     consts[i], consts[j] = consts[j], consts[i]
     rewrite_call(bad, consts)
     r, _ = run_elf(build(bad), case["model"])
@@ -315,9 +338,10 @@ ENDAT_MACRO = ["MODE_CMD", "TOTAL_BITS", "ST_BITS", "MT_BITS", "CLK_PIN", "DATA_
                "TIMEOUT_CYCLES", "DATA_EN_PIN"]
 # ModeCommand is a position command (7 or 56) and 56 carries F2, so
 # totalBits = 1 + 2 + ST + MT + 5; DATA_EN_PIN (the transceiver DE) was appended.
+# t1Clocks is the fixed 2T lead-in (validate() rejects other values), still unique among the values.
 ENDAT_FIELDS = [("modeCommand", 56), ("totalBits", 29), ("singleTurnBits", 13),
                 ("multiTurnBits", 8), ("clkPin", 3), ("dataTxPin", 4), ("dataRxPin", 6),
-                ("halfPeriodCycles", 26), ("t1Clocks", 3), ("trtCycles", 21),
+                ("halfPeriodCycles", 26), ("t1Clocks", 2), ("trtCycles", 21),
                 ("trecCycles", 1001), ("timeoutCycles", 102), ("dataEnPin", 9)]
 
 

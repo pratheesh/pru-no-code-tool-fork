@@ -364,7 +364,7 @@ class TestEndatModel:
 SSI_SPEC = {
     "block": "ssi_initiator_block", "subdir": "application_specific",
     "macroCall": "m_ssi_read",
-    "macroArgs": {"RES": "R4", "TOTAL_WIDTH": "25", "ST_BITS": "13",
+    "macroArgs": {"RES": "R4", "STATUS": "R5", "TOTAL_WIDTH": "25", "ST_BITS": "13",
                   "MT_BITS": "12", "CLK_PIN": "0", "DATA_PIN": "1",
                   "CPOL": "1", "HALF_PERIOD": "4", "MONO_CYCLES": "8",
                   "PARITY_EN": "1", "PARITY_TYPE": "0", "ERR_EN": "1",
@@ -396,7 +396,7 @@ class TestSsiElf:
         frames = [e for e in m.events() if e["kind"] == "frame"]
         assert len(frames) == 1
         assert u32(r.registers[4]) == frames[0]["raw"]
-        assert u32(r.registers[29]) & 0xFF == 0      # status ok
+        assert u32(r.registers[5]) == 0      # STATUS output: parity and error bit ok
         # independent decoder agrees
         wire = [(c, (gpo & 1) | (gpi & 2)) for (c, gpo, gpi) in r.trace]
         dec = buscosim.decode_ssi(wire, 0, 1, cpol=1, idle_gap_cycles=40,
@@ -407,7 +407,7 @@ class TestSsiElf:
         m = _ssi_model(force_bad_parity=True, mono_cycles=60)
         r = elf_cosim.run_elf_closed_loop(built["ssi"], m, max_steps=5000)
         m.flush(r.cycles)
-        assert u32(r.registers[29]) & 1 == 1, "firmware missed parity error"
+        assert u32(r.registers[5]) & 1 == 1, "firmware missed parity error"
         f = [e for e in m.events() if e["kind"] == "frame"][0]
         assert f["parity_ok"] is False
 

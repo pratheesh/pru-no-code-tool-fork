@@ -1298,6 +1298,7 @@ function testSsi(){
         const macro = ssiMod.getMacro('m_ssi_read','m_ssi_read');
         const exp = expandMacro(macro, {
             RES: 'R4',
+            STATUS: 'R5',
             TOTAL_WIDTH: String(cfg.totalWidth),
             ST_BITS: String(cfg.singleTurnBits),
             MT_BITS: String(cfg.multiTurnBits),
@@ -1375,7 +1376,7 @@ function testSsi(){
             process.exit(1);
         }
         // status should be 0
-        const status = res.pruState.registers[29] & 0xFF;
+        const status = res.pruState.registers[5] & 0xFF;
         if(status !== 0){
             console.error(`SSI status FAIL cfg${ci}: expected 0 got ${status}`);
             process.exit(1);
@@ -1396,7 +1397,7 @@ function testSsi(){
         let frame = oracle.buildFrame({st, mt, totalWidth:cfg.totalWidth, stBits:cfg.singleTurnBits, mtBits:cfg.multiTurnBits, parityEnable:true, parityType:0, errorBitEnable:false, grayCode:false, errorFlag:false});
         frame ^= 1; // flip parity bit
         const res = runSsiFrame(cfg, frame);
-        const status = res.pruState.registers[29] & 0xFF;
+        const status = res.pruState.registers[5] & 0xFF;
         if((status & 1) === 0){
             console.error('SSI bad parity FAIL: expected parity error bit set');
             process.exit(1);
@@ -1410,7 +1411,7 @@ function testSsi(){
         const mt = 0x12 & ((1<<cfg.multiTurnBits)-1);
         const frame = oracle.buildFrame({st, mt, totalWidth:cfg.totalWidth, stBits:cfg.singleTurnBits, mtBits:cfg.multiTurnBits, parityEnable:cfg.parityEnable, parityType:cfg.parityType, errorBitEnable:true, grayCode:cfg.grayCode, errorFlag:true});
         const res = runSsiFrame(cfg, frame);
-        const status = res.pruState.registers[29] & 0xFF;
+        const status = res.pruState.registers[5] & 0xFF;
         if((status & 4) === 0){
             console.error('SSI error-bit FAIL: expected error status bit set');
             process.exit(1);

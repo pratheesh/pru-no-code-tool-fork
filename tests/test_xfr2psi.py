@@ -97,9 +97,12 @@ def test_block_contract_parameters():
 
 
 def test_soc_catalogs_include_block():
-    for soc_file in ["pru_blocks_am64x.syscfg.js", "pru_blocks_am243x.syscfg.js", "pru_blocks_am261x.syscfg.js"]:
+    # ICSSM (AM261x) has no XFR2PSI widget, so its palette must not offer the block.
+    for soc_file in ["pru_blocks_am64x.syscfg.js", "pru_blocks_am243x.syscfg.js"]:
         txt = (REPO_ROOT / ".metadata" / "sysconfig" / ".meta" / "soc" / soc_file).read_text(encoding="utf-8")
         assert "xfr2psi_block" in txt, f"{soc_file} missing xfr2psi_block — block absent from catalog does not exist"
+    am261x = (REPO_ROOT / ".metadata" / "sysconfig" / ".meta" / "soc" / "pru_blocks_am261x.syscfg.js").read_text(encoding="utf-8")
+    assert "xfr2psi_block" not in am261x
 
 
 def test_device_caps_xfr2psi_icssg_only():

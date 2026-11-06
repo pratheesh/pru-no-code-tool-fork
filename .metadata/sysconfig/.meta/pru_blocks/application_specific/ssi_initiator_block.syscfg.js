@@ -3,7 +3,7 @@ const ssiModule = {
     displayName: "SSI Initiator",
     defaultInstanceName: "SSI_INITIATOR_",
     description: "Synchronous SSI absolute encoder initiator (generic).",
-    longDescription: `Generic synchronous SSI initiator with configurable frame width (8-32), single-turn/multi-turn extraction, clock polarity/rate, optional parity and error bits, and gray/binary decode. A stuck-data timeout is not implemented: the block waits for the data line as the frame demands.\n\nPeripheral resources: bit-bangs one R30 clock output and one R31 data input; no PRU peripherals (IEP/MAC/SPAD) required. Pinmux: clock and data must be on distinct PRU R30/R31 bits routed through PRU-ICSSG pinmux (AM64x/AM243x/AM261x). Isolation: single PRU slice owns both pins during transfer; concurrent workloads must not drive the same R30 bit and must avoid R31 contention. Deterministic timing: each clock half-period uses halfPeriodCycles delay-loop iterations, each costing two PRU cycles; monoTimeCycles likewise counts two-cycle idle iterations. The per-bit clock path costs about 4*halfPeriodCycles plus instruction overhead. TIMEOUT_CYCLES is reserved and does not run a delay loop. BOM: RS-422/RS-485 transceiver required for differential SSI (e.g. AM26C31/32); no BOM change for single-ended test. Simulator validates logical shift, gray decode, parity and extraction; physical propagation delay, transceiver skew and monoflop timing require silicon validation.`,
+    longDescription: `Generic synchronous SSI initiator with configurable frame width (8-32), single-turn/multi-turn extraction, clock polarity/rate, optional parity and error bits, and gray/binary decode. output1 is the frame (position payload above the error/parity bits); output2 is the check status: 0 = ok, 1 = parity error, 4 = error bit active, 5 = both (always 0 when neither check is enabled). A stuck-data timeout is not implemented: the block waits for the data line as the frame demands.\n\nPeripheral resources: bit-bangs one R30 clock output and one R31 data input; no PRU peripherals (IEP/MAC/SPAD) required. Pinmux: clock and data must be on distinct PRU R30/R31 bits routed through PRU-ICSSG pinmux (AM64x/AM243x/AM261x). Isolation: single PRU slice owns both pins during transfer; concurrent workloads must not drive the same R30 bit and must avoid R31 contention. Deterministic timing: each clock half-period uses halfPeriodCycles delay-loop iterations, each costing two PRU cycles; monoTimeCycles likewise counts two-cycle idle iterations. The per-bit clock path costs about 4*halfPeriodCycles plus instruction overhead. TIMEOUT_CYCLES is reserved and does not run a delay loop. BOM: RS-422/RS-485 transceiver required for differential SSI (e.g. AM26C31/32); no BOM change for single-ended test. Simulator validates logical shift, gray decode, parity and extraction; physical propagation delay, transceiver skew and monoflop timing require silicon validation.`,
     uiView: "graph",
     config: [
         { name: "$shape", hidden: true, default: "square" },
@@ -25,10 +25,12 @@ const ssiModule = {
         { name: "timeoutCycles", displayName: "Stuck-data timeout loops (reserved)", default: 100, hidden: true },
         { name: "opCode", default: "m_ssi_read", hidden: true },
         { name: "numOfInputPorts", default: 0, hidden: true },
-        { name: "numOfOutputPorts", default: 1, hidden: true },
+        { name: "numOfOutputPorts", default: 2, hidden: true },
+        { name: "multiOutputMacroArgs", default: true, hidden: true },
         { name: "output1Size", default: 4, hidden: true },
+        { name: "output2Size", default: 4, hidden: true },
         { name: "numOfConstants", default: 13, hidden: true },
-        // Positional order MUST match the .macro line in getMacro(): RES, TOTAL_WIDTH, ST_BITS, MT_BITS, CLK_PIN, DATA_PIN, CPOL,
+        // Positional order MUST match the .macro line in getMacro(): RES, STATUS, TOTAL_WIDTH, ST_BITS, MT_BITS, CLK_PIN, DATA_PIN, CPOL,
         // HALF_PERIOD, MONO_CYCLES, PARITY_EN, PARITY_TYPE, ERR_EN, GRAY_EN, TIMEOUT_CYCLES (arity AND order are checked by
         // tests/test_ssi_syscfg.py, which decodes the generated firmware against an SSI encoder model).
         { name: "constant1", default: 25, hidden: true, getValue: (inst) => inst.totalWidth }, // totalWidth
@@ -56,16 +58,19 @@ const ssiModule = {
         return [
             { name: "prev", type: "IO_PREV" },
             { name: "next", type: "IO_NEXT" },
-            { name: "output1", type: "output32" }
+            { name: "output1", type: "output32" },
+            { name: "output2", type: "output32" }
         ];
     },
     validate(inst, validation) {
         if (inst.totalWidth < 8 || inst.totalWidth > 32) validation.logError("totalWidth must be 8..32", inst, "totalWidth");
         if (inst.singleTurnBits < 1 || inst.singleTurnBits > 32) validation.logError("singleTurnBits must be 1..32", inst, "singleTurnBits");
         if (inst.multiTurnBits < 0 || inst.multiTurnBits > 32) validation.logError("multiTurnBits must be 0..32", inst, "multiTurnBits");
-        if ((inst.singleTurnBits + inst.multiTurnBits) > inst.totalWidth) {
-            // allow parity/error bits to consume remainder; just ensure ST+MT <= total
-            if ((inst.singleTurnBits + inst.multiTurnBits) > inst.totalWidth) validation.logError("singleTurnBits + multiTurnBits must be <= totalWidth", inst, "singleTurnBits");
+        // The frame is [payload | error bit | parity bit]; an enabled error or parity bit takes one of the totalWidth bits.
+        const statusBits = (inst.parityEnable ? 1 : 0) + (inst.errorBitEnable ? 1 : 0);
+        if ((inst.singleTurnBits + inst.multiTurnBits) > inst.totalWidth - statusBits) {
+            validation.logError("singleTurnBits + multiTurnBits must be <= totalWidth minus the enabled parity and error bits (" +
+                (inst.totalWidth - statusBits) + " payload bits available)", inst, "singleTurnBits");
         }
         if (inst.clkPin === inst.dataPin) validation.logError("clkPin and dataPin must differ", inst, "clkPin");
         if (inst.clkPin < 0 || inst.clkPin > 15) validation.logError("clkPin must be 0..15", inst, "clkPin");
@@ -75,10 +80,11 @@ const ssiModule = {
     getMacro(pruInstructionMacro, opCode) {
         opCode = opCode || pruInstructionMacro.split(",")[0];
         return [
-            `${opCode} .macro RES, TOTAL_WIDTH, ST_BITS, MT_BITS, CLK_PIN, DATA_PIN, CPOL, HALF_PERIOD, MONO_CYCLES, PARITY_EN, PARITY_TYPE, ERR_EN, GRAY_EN, TIMEOUT_CYCLES`,
+            `${opCode} .macro RES, STATUS, TOTAL_WIDTH, ST_BITS, MT_BITS, CLK_PIN, DATA_PIN, CPOL, HALF_PERIOD, MONO_CYCLES, PARITY_EN, PARITY_TYPE, ERR_EN, GRAY_EN, TIMEOUT_CYCLES`,
             `    ; --- SSI Initiator (generic synchronous) ---`,
             `    ; RES = shifted frame (TOTAL_WIDTH bits, MSB first); with GRAY_EN the position payload is converted to binary`,
-            `    ; Caller extracts ST/MT via shifts/masks; parity/error checked -> STATUS in TEMP_REG2.b0 (0=ok,1=parity err,4=error bit; TIMEOUT_CYCLES is reserved, no timeout status)`,
+            `    ; STATUS = parity/error check result, an allocated output (0=ok, 1=parity err, 4=error bit; both = 5; TIMEOUT_CYCLES is reserved, no timeout status)`,
+            `    ; Caller extracts ST/MT from RES via shifts/masks`,
             `    ; Frame (SSI datasheet convention, CPOL=1): CLK idles high. The first falling`,
             `    ; edge latches the position; each rising edge shifts out the next bit, MSB first;`,
             `    ; DATA is sampled in the high phase, before the next falling edge. A frame is`,
@@ -88,7 +94,7 @@ const ssiModule = {
             `    ; Error bit: if enabled, bit before parity (or last) is active-low error flag`,
             `    ldi   RES, 0`,
             `    ldi   TEMP_REG1, 0               ; bit counter copy`,
-            `    ldi   TEMP_REG2, 0               ; status = 0`,
+            `    ldi   STATUS, 0                  ; status = 0`,
             `    ; init clock to idle`,
             `    .if CPOL == 1`,
             `    set   R30, R30, CLK_PIN`,
@@ -175,7 +181,7 @@ const ssiModule = {
             `    xor   TEMP_REG1, TEMP_REG1, 1        ; invert for odd`,
             `    .endif`,
             `    qbeq  m_ssi_parity_ok?, TEMP_REG1, TEMP_REG3`,
-            `    or    TEMP_REG2.b0, TEMP_REG2.b0, 1  ; parity error`,
+            `    or    STATUS, STATUS, 1              ; parity error`,
             `m_ssi_parity_ok?:`,
             `    .endif`,
             `    ; --- error bit check (if enabled) ---`,
@@ -189,7 +195,7 @@ const ssiModule = {
             `    .endif`,
             `    ; The error bit is active low: 1 = ok, 0 = encoder error -> status bit 2 (value 4).`,
             `    qbne  m_ssi_err_ok?, TEMP_REG1, 0`,
-            `    or    TEMP_REG2.b0, TEMP_REG2.b0, 4`,
+            `    or    STATUS, STATUS, 4`,
             `m_ssi_err_ok?:`,
             `    .endif`,
             `    ; --- Gray -> binary on the position payload (after parity: parity covers the raw bits) ---`,
@@ -210,7 +216,7 @@ const ssiModule = {
             `    and   RES, RES, ((1 << (PARITY_EN + ERR_EN)) - 1)`,
             `    or    RES, RES, TEMP_REG1`,
             `    .endif`,
-            `    ; Caller can test TEMP_REG2.b0 for nonzero to detect fault`,
+            `    ; Downstream blocks test STATUS (output2) for nonzero to detect a bad reading`,
             `    .endm`
         ].join("\n");
     },

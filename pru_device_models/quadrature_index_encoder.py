@@ -21,8 +21,9 @@ from typing import Any, Dict, List, Tuple
 
 from pru_device_models.device_model import DeviceModel
 
-# x4 state table: state = 2*A + B. Forward (CW) order 0,1,3,2,0...
-_FWD = {0: 1, 1: 3, 3: 2, 2: 0}
+# x4 state table: state = 2*A + B. Forward (CW) order 0,2,3,1,0..., so A leads B
+# on forward motion (A rises first), as in the in-tool model.
+_FWD = {0: 2, 2: 3, 3: 1, 1: 0}
 _REV = {v: k for k, v in _FWD.items()}
 
 
@@ -95,7 +96,7 @@ class QuadratureIndexEncoder(DeviceModel):
                     "kind": "edge", "cycle": cycle, "state": self._state,
                     "count": self.count, "dir": d,
                 })
-                if self.count % self.cpr == 0 and self.count != 0:
+                if self.cpr > 0 and self.count % self.cpr == 0 and self.count != 0:
                     self._z_high_until = cycle + self.index_width_cycles
                     self._events.append({"kind": "index", "cycle": cycle})
                 self._seg_counts_done += 1

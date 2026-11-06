@@ -700,3 +700,88 @@ class TestMutation:
 
         frames = [e for e in m.events() if e["kind"] == "frame"]
         assert frames[0]["crc_ok"] is False, "Mutation was not caught! crc_ok is True"
+
+
+# ===================================================================
+# Consecutive frames and running disparity
+# ===================================================================
+def _drive_frames(model, n_frames, gap=100, half_period=10):
+    """Clock `n_frames` complete frames with an idle gap between them."""
+    cyc = 0
+    for _ in range(n_frames):
+        for _ in range(len(model._wire_bits)):
+            for _ in range(half_period):
+                model.tick(cyc, 0)
+                cyc += 1
+            for _ in range(half_period):
+                model.tick(cyc, 1 << model.ma_pin)
+                cyc += 1
+        for _ in range(gap):
+            model.tick(cyc, 0)
+            cyc += 1
+    model.flush(cyc)
+
+
+class TestConsecutiveFrames:
+    def test_second_frame_is_not_overclocked(self):
+        m = BissLineEncoder(data_bits=16, position=0xBEEF, line_coding=False, fec_enable=False)
+        _drive_frames(m, 2)
+        assert m.faults() == []
+        frames = [e for e in m.events() if e["kind"] == "frame"]
+        assert len(frames) == 2
+        assert all(f["crc_ok"] and f["position"] == 0xBEEF for f in frames)
+        assert all(f["clocks_received"] == len(m._wire_bits) for f in frames)
+
+    def test_overclock_inside_one_frame_is_still_flagged(self):
+        m = BissLineEncoder(data_bits=16, position=0x1234, line_coding=False, fec_enable=False)
+        _clock_model(m, len(m._wire_bits) + 1)
+        assert any("overclocked" in f for f in m.faults())
+
+    def test_second_frame_with_line_coding_and_fec(self):
+        m = BissLineEncoder(data_bits=16, position=0xA55A)
+        _drive_frames(m, 3)
+        assert m.faults() == []
+        frames = [e for e in m.events() if e["kind"] == "frame"]
+        assert [f["position"] for f in frames] == [0xA55A] * 3
+
+
+def _sym_str(sym):
+    return format(sym, "010b")
+
+
+class TestRunningDisparity:
+    # Symbols written out from the 8b/10b data code table (abcdei fghj, RD- first).
+    def test_known_vectors(self):
+        assert _sym_str(encode_8b10b_byte(0x00, rd=-1)) == "1001110100"   # D0.0 at RD-
+        assert _sym_str(encode_8b10b_byte(0x00, rd=+1)) == "0110001011"   # D0.0 at RD+
+        assert _sym_str(encode_8b10b_byte(0x20, rd=-1)) == "1001111001"   # D0.1 at RD-
+        assert _sym_str(encode_8b10b_byte(0x20, rd=+1)) == "0110001001"   # D0.1 at RD+
+        assert _sym_str(encode_8b10b_byte(0x95, rd=-1)) == "1010101101"   # D21.4 at RD-
+        assert _sym_str(encode_8b10b_byte(0xAA, rd=-1)) == "0101011010"   # D10.5 at RD-
+        assert _sym_str(encode_8b10b_byte(0xF1, rd=-1)) == "1000110111"   # D17.7 uses A7 at RD-
+        assert _sym_str(encode_8b10b_byte(0xEB, rd=+1)) == "1101001000"   # D11.7 uses A7 at RD+
+
+    def test_repeated_byte_alternates_disparity(self):
+        m = BissLineEncoder(data_bits=16, position=0, line_coding=True, fec_enable=False)
+        wire = m._apply_8b10b([0, 0, 1, 0, 0, 0, 0, 0] * 2)    # byte 0x20 twice
+        syms = [int("".join(map(str, wire[i:i + 10])), 2) for i in range(0, len(wire), 10)]
+        assert [_sym_str(s) for s in syms] == ["1001111001", "0110001001"]
+
+    def test_disparity_stays_bounded_for_any_byte_sequence(self):
+        import random
+        rng = random.Random(7)
+        m = BissLineEncoder(data_bits=16, line_coding=True, fec_enable=False)
+        bits = [rng.getrandbits(1) for _ in range(8 * 400)]
+        wire = m._apply_8b10b(bits)
+        total = 0
+        for i, b in enumerate(wire):
+            total += 1 if b else -1
+            if i % 10 == 9:
+                assert total in (0, 2), f"disparity {total} after symbol {i // 10}"
+        # symbols decode back to the original bytes
+        out = []
+        for i in range(0, len(wire), 10):
+            sym = int("".join(map(str, wire[i:i + 10])), 2)
+            bv = decode_8b10b_symbol(sym)
+            out.extend((bv >> j) & 1 for j in range(7, -1, -1))
+        assert out == bits

@@ -98,9 +98,10 @@ def test_isdefed_guard_defines_symbol_and_numeric_set_feeds_later_condition():
     assert got["noSymbols"] == []
 
 
-# 104 under the global operand table (IS_FORWARD unbound, `R15 == 1` guessed false); 99 with
-# the block's own default (transformType Forward -> IS_FORWARD = 1),.
-EXPECT_IQMATH_INSTRUCTIONS = 99
+# 104 under the global operand table (IS_FORWARD unbound, `R15 == 1` guessed false); 100 with
+# the block's own default (transformType Forward -> IS_FORWARD = 1): the macro loads D into OUT1
+# and Q into OUT2 with one 4-byte load each.
+EXPECT_IQMATH_INSTRUCTIONS = 100
 
 
 # ---------------------------------------------------------------------------

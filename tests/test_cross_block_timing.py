@@ -98,7 +98,7 @@ def test_ssi_loop_trip_contract_and_monoflop(tmp_path):
     # HALF_PERIOD and MONO_CYCLES are documented iteration counts, not cycles.
     spec = dict(block="ssi_initiator_block", subdir="application_specific",
                 macroCall="m_ssi_read", macroArgs=dict(
-                    RES="R4", TOTAL_WIDTH="8", ST_BITS="4", MT_BITS="4",
+                    RES="R4", STATUS="R5", TOTAL_WIDTH="8", ST_BITS="4", MT_BITS="4",
                     CLK_PIN="0", DATA_PIN="1", CPOL="1", HALF_PERIOD="10",
                     MONO_CYCLES="20", PARITY_EN="0", PARITY_TYPE="0",
                     ERR_EN="0", GRAY_EN="0", TIMEOUT_CYCLES="100"),

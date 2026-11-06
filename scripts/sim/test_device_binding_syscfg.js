@@ -192,6 +192,29 @@ test('the module validator accepts a legal device binding', () => {
     assert.strictEqual(validateR31SimulationInput(real, report), true, JSON.stringify(report.errors));
 });
 
+test('the manifest carries the clock pin the bound block supplies when the field is unset', () => {
+    const src = fs.readFileSync(SRC, 'utf8').replace(/\r\n/g, '\n');
+    const body = ['buildDeviceBindings', 'devicePinDefaults'].map(n => extractFunction(src, n)).join('\n');
+    const system = { modules: { '/x/ssi_block': { $instances: [{ dataPin: 3, clkPin: 4 }] } } };
+    const deviceModelTable = { COMPANION_PIN_BLOCKS: { ssi: [
+        { module: '/x/ssi_block', matchField: 'dataPin', clockField: 'clkPin' }] } };
+    // eslint-disable-next-line no-new-func
+    const { buildDeviceBindings } = new Function('system', 'deviceModelTable',
+        `${body}; return { buildDeviceBindings };`)(system, deviceModelTable);
+
+    const real = inst(3, { gpi3_inputMode: 'device', gpi3_deviceKind: 'ssi' });   // clock field unset (-1)
+    real.signalsToDisplayR31 = ['3'];
+    let b = buildDeviceBindings(real).bindings[0];
+    assert.strictEqual(b.clockPin, 4, 'clock pin must come from the block: ' + JSON.stringify(b));
+    assert.strictEqual(b.indexPin, null);
+
+    // an explicit field still wins over the block's pin
+    const explicit = inst(3, { gpi3_inputMode: 'device', gpi3_deviceKind: 'ssi', gpi3_deviceClockPin: 6 });
+    explicit.signalsToDisplayR31 = ['3'];
+    b = buildDeviceBindings(explicit).bindings[0];
+    assert.strictEqual(b.clockPin, 6);
+});
+
 let failed = 0;
 for (const [name, fn] of cases) {
     try {

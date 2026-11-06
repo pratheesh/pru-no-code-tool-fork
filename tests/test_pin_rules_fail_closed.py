@@ -274,3 +274,21 @@ def test_red_a_baseline_entry_gaining_findings_is_caught():
     grown[victim]["errors"] = grown[victim]["errors"] + ["    one more"]
     assert _baseline_violations(grown, ref) == [
         f"baseline entry grew: {victim} ({ref[victim]} -> {ref[victim] + 1} findings)"]
+
+
+# ----------------------------------------------- 4. malformed pin values are reported
+@needs_sysconfig
+@pytest.mark.parametrize("pin", ["3junk", "-1", "32", "3.5", ""], ids=["trailing-text", "negative", "above-31", "fraction", "empty"])
+def test_red_malformed_pin_value_is_reported_not_truncated(tmp_path, pin):
+    root = _synth_root(tmp_path, RETURN_BODY, pins=GPO_ONLY)
+    res = _check_fixture(root, "bad_pin.syscfg", f'const s=A("synth"); s.$name="SYN"; s.pin="{pin}";\n')
+    assert res.returncode == 1, res.stdout + res.stderr
+    assert f'unparseable GPO pin "{pin}"' in res.stderr, res.stderr
+
+
+@needs_sysconfig
+@pytest.mark.parametrize("pin", ["0", "9", "31", "09"])
+def test_green_whole_number_pin_values_are_accepted(tmp_path, pin):
+    root = _synth_root(tmp_path, RETURN_BODY, pins=GPO_ONLY)
+    res = _check_fixture(root, "good_pin.syscfg", f'const s=A("synth"); s.$name="SYN"; s.pin="{pin}";\n')
+    assert res.returncode == 0, res.stdout + res.stderr

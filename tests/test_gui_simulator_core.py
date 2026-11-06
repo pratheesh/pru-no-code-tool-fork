@@ -70,3 +70,21 @@ def test_word_register_read_returns_its_16_bits(src, expected):
 def test_unimplemented_base_instruction_stops_the_run(opcode):
     result = run(["LDI R1, 1", "%s R1, R2" % opcode])
     assert "not yet implemented" in result.get("error", ""), result
+
+
+@pytest.mark.parametrize("program,reg,expected", [
+    (["LDI32 R0, 0xAABBCCDD", "ZERO &R0, 1"], 0, 0xAABBCC00),
+    (["LDI32 R0, 0xAABBCCDD", "ZERO &R0.b2, 1"], 0, 0xAA00CCDD),
+    (["LDI32 R0, 0xAABBCCDD", "ZERO &R0.w1, 2"], 0, 0xAA0000DD),
+    (["LDI32 R0, 0xAABBCCDD", "FILL &R0.b1, 1"], 0, 0xAABBFFDD),
+    (["LDI32 R0, 0xAABBCCDD", "ZERO &R0, 4"], 0, 0),
+])
+def test_zero_and_fill_touch_only_the_named_bytes(program, reg, expected):
+    regs = run(program)["regs"]
+    assert regs[reg] == expected, "R%d is 0x%08X, want 0x%08X" % (reg, regs[reg], expected)
+
+
+def test_zero_spans_into_the_next_register_by_bytes():
+    regs = run(["LDI32 R0, 0xAABBCCDD", "LDI32 R1, 0x11223344", "ZERO &R0.b3, 3"])["regs"]
+    assert regs[0] == 0x00BBCCDD
+    assert regs[1] == 0x11220000

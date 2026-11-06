@@ -30,6 +30,7 @@ import json
 import os
 import re
 import shlex
+import signal
 import socket
 import subprocess
 import sys
@@ -156,7 +157,9 @@ def run_logged(argv, cwd, env, log, timeout):
         try:
             flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) if os.name == "nt" else 0
             proc = subprocess.Popen(argv, cwd=cwd, env=env, stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE, text=True, creationflags=flags)
+                                    stderr=subprocess.PIPE, text=True, creationflags=flags,
+                                    # own session on POSIX, so the whole group can be signalled
+                                    start_new_session=(os.name != "nt"))
             try:
                 stdout, stderr = proc.communicate(timeout=timeout)
             except subprocess.TimeoutExpired:
@@ -176,7 +179,18 @@ def kill_process_tree(proc):
         subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)],
                        capture_output=True, text=True, timeout=30)
     else:
-        proc.kill()
+        # the command leads its own session (see run_logged): signal the group so
+        # gmake's compiler / simulator children die with it
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        except OSError:
+            proc.kill()
+    try:
+        proc.wait(timeout=30)
+    except subprocess.TimeoutExpired:
+        pass
 
 
 class ProjectLock:

@@ -17,14 +17,15 @@ const parkClarkeModule = {
         { name: "opCode", default: "m_iqmath_transform", hidden: true },
         { name: "numOfInputPorts", default: 4, hidden: true }, // Ia, Ib, Ic, Theta
         { name: "numOfOutputPorts", default: 2, hidden: true }, // D, Q
-        { name: "output1Size", default: 8, hidden: true }, // D and Q are 8 bytes total
-        { name: "output2Size", default: 4, hidden: true },
+        { name: "multiOutputMacroArgs", default: true, hidden: true }, // one macro destination per output port
+        { name: "output1Size", default: 4, hidden: true }, // D (Alpha for the inverse transform)
+        { name: "output2Size", default: 4, hidden: true }, // Q (Beta for the inverse transform)
         { name: "numOfConstants", default: 1, hidden: true },
 
         { name: "constant1", hidden: true, default: 0, getValue: (inst) => inst.transformType === "Forward" ? 1 : 0 },
 
-        // The default forward macro executes in 97 cycles (109 assembled instructions).
-        { name: "noOfCycles", displayName: "Number Of Cycles", getValue: (inst) => 97, default: 97 },
+        // The default forward macro executes in 98 cycles.
+        { name: "noOfCycles", displayName: "Number Of Cycles", getValue: (inst) => 98, default: 98 },
 
         { name: "blockMaturity", displayName: "Block Maturity", default: "simulator-tested", options: [{name: "metadata-only"}, {name: "assembles"}, {name: "simulator-tested"}, {name: "dual-oracle-tested"}, {name: "hardware-validated"}], hidden: true }
     ],
@@ -45,8 +46,9 @@ const parkClarkeModule = {
     getMacro(pruInstructionMacro, opCode) {
         opCode = opCode || pruInstructionMacro.split(",")[0];
         return [
-            `${opCode} .macro OUT1, OUT1_HI, IN1, IN2, IN3, THETA, IS_FORWARD`,
-            `    ; OUT1_HI: high word of the 8-byte output (the register after OUT1, written through OUT1)`,
+            `${opCode} .macro OUT1, OUT2, IN1, IN2, IN3, THETA, IS_FORWARD`,
+            `    ; OUT1 = D (Ialpha for the inverse transform), OUT2 = Q (Ibeta for the inverse transform).`,
+            `    ; OUT1 doubles as a scratch register until the final stores; OUT2 is written last.`,
             `    ; --- Forward Clarke & Park (real Q12 fixed-point) ---`,
             `    .if IS_FORWARD == 1`,
             `    ; --- Clarke ---`,
@@ -152,10 +154,11 @@ const parkClarkeModule = {
             `q_pos?:`,
             `    lsr   TEMP_REG3, TEMP_REG3, 12`,
             `q_done?:`,
-            `    ; Store Q right after D and load both into OUT1 (8 bytes).`,
+            `    ; Store Q right after D, then load D into OUT1 and Q into OUT2.`,
             `    ldi32 TEMP_REG2, 0x400`,
             `    sbbo  &TEMP_REG3, TEMP_REG2, 4, 4`,
-            `    lbbo  &OUT1, TEMP_REG2, 0, 8`,
+            `    lbbo  &OUT1, TEMP_REG2, 0, 4`,
+            `    lbbo  &OUT2, TEMP_REG2, 4, 4`,
             `    .else`,
             `    ; --- Inverse Park ---`,
             `    ; Convention: TI motor_control_sdk IPARK_run (rtlibs/transforms/ipark/ipark.h):`,
@@ -266,7 +269,8 @@ const parkClarkeModule = {
             `ib_div_done?:`,
             `    ; Ib is in TEMP_REG3; Ia (Ialpha) is already at [0x400].`,
             `    sbbo  &TEMP_REG3, TEMP_REG2, 4, 4`,
-            `    lbbo  &OUT1, TEMP_REG2, 0, 8`,
+            `    lbbo  &OUT1, TEMP_REG2, 0, 4`,
+            `    lbbo  &OUT2, TEMP_REG2, 4, 4`,
             `    .endif`,
             `    .endm`,
             ``,

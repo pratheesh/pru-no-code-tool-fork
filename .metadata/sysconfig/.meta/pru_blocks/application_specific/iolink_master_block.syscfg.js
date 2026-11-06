@@ -8,7 +8,7 @@
  * generation.
  *
  * COM rates: COM1=4.8k, COM2=38.4k, COM3=230.4k baud.
- * Frame format: UART 8N1 (8 data bits, no parity, 1 stop bit).
+ * Frame format: IEC 61131-9 UART character, 11 bits: start, 8 data (LSB first), even parity, stop.
  * Half-duplex on C/Q line.
  *
  * The in-tool simulator does not model the ENDAT FIFO/TX/RX state machine, so
@@ -66,6 +66,31 @@ function getIcssCfgDefinitions() {
     return s;
 }
 
+/**
+ * PRU number of the core this design is generated for (same helper as uart_config).
+ * The ENDAT peripheral registers are per core, so the macro is emitted per core.
+ */
+function getPruNumberFromContext() {
+    const common = system.getScript("/common");
+    const coreName = common.getSelfSysCfgCoreName();
+    if (coreName && coreName.includes("pru")) {
+        const match = coreName.match(/pru(\d+)$/);
+        if (match && match[1]) {
+            const n = parseInt(match[1]);
+            if (!isNaN(n)) {
+                return n;
+            }
+        }
+    }
+    return 0;
+}
+
+// One IO-Link UART character: start bit, 8 data bits (LSB first), even parity bit, stop bit.
+var FRAME_BITS = 11;
+// CHn_CFG0: bitSwap [31], RX_FRAME_SIZE [27:16], TX_FRAME_SIZE [15:11].
+var CHCFG0_VALUE = ((0x80000000 | (FRAME_BITS << 16) | (FRAME_BITS << 11)) >>> 0);
+var cfg0Hex = "0x" + CHCFG0_VALUE.toString(16).toUpperCase();
+
 function comModeToBaud(comMode) {
     switch (comMode) {
         case "COM1": return 4800;
@@ -84,6 +109,13 @@ function baudToClockDiv(baud) {
     return div;
 }
 
+// RX clock divider for 8x oversampling: the receiver takes one FIFO sample per eighth of a bit.
+function baudToRxClockDiv(baud) {
+    var div = Math.round(192000000 / (baud * 8)) - 1;
+    if (div < 0 || div > 65535) { return -1; }
+    return div;
+}
+
 var iolinkModule = {
     displayName: "IO-Link Master",
     defaultInstanceName: "IOLINK_MSTR_",
@@ -95,9 +127,9 @@ var iolinkModule = {
         "",
         "**Protocol flow per transaction:**",
         "  1. Wake-up pulse: C/Q driven low for >=80 us, then released high.",
-        "  2. M-sequence TX: Master transmits N bytes of 8N1 UART via ENDAT hardware.",
+        "  2. M-sequence TX: Master transmits N bytes (1..8), one 11-bit 8E1 character each, via ENDAT hardware.",
         "  3. Turnaround: C/Q released; master listens for >=4 bit periods.",
-        "  4. Response RX: Device replies with M bytes of 8N1 UART via ENDAT hardware.",
+        "  4. Response RX: Device replies with M bytes (0..4), one 11-bit 8E1 character each, via ENDAT hardware.",
         "  5. Idle: C/Q high.",
         "",
         "**Peripheral resources:**",
@@ -107,9 +139,9 @@ var iolinkModule = {
         "- No IEP, MAC, or SPAD required.",
         "",
         "**Supported COM rates:**",
-        "  COM1 = 4.8 kbps  (divider 39999, frame 10 bits)",
-        "  COM2 = 38.4 kbps (divider  4999, frame 10 bits)",
-        "  COM3 = 230.4 kbps(divider   832, frame 10 bits)",
+        "  COM1 = 4.8 kbps  (divider 39999, frame 11 bits)",
+        "  COM2 = 38.4 kbps (divider  4999, frame 11 bits)",
+        "  COM3 = 230.4 kbps(divider   832, frame 11 bits)",
         "",
         "**BOM:** Requires an external IO-Link transceiver (e.g. TI OL1013, MAX14819)",
         "to convert the PRU's 3.3V ENDAT UART to 24V C/Q levels.",
@@ -117,8 +149,21 @@ var iolinkModule = {
         '**Status:** metadata only. The ENDAT programming follows the UART blocks',
         '(`uart_config`, `uart_tx_op`, `uart_rx_op`), but the in-tool simulator does',
         "NOT model the internal ENDAT FIFO/TX/RX state machine, so the transaction",
-        "is not simulated; only the R30 wake-up/DIR waveform is checked.",
-        "The M-sequence transmit sends byte 0 only; multi-byte M-sequences are not implemented."
+        "is not simulated in the tool; only the R30 wake-up/DIR waveform is checked.",
+        "The TI pru-simulator's peripheral-interface model runs the transmit and receive paths.",
+        "The transmit path sends up to 8 bytes (two 32-bit inputs), one character per byte, each character",
+        "started by its own TX GO.",
+        "",
+        "**Outputs:** output1 = response bytes, first received byte most significant (up to 4 bytes).",
+        "output2 = receive status: bit 0 = parity error, bit 1 = framing error (start or stop bit), 0 = all",
+        "characters were received correctly. The receiver is re-armed for every character and samples each",
+        "bit at 8x oversampling.",
+        "",
+        "**Limits:** the character-to-character timing of a device response (characters following each",
+        "other with 0..3 bit times of gap) and the ENDAT receiver's start-bit detection are checked only",
+        "against the pru-simulator model, not on silicon. The DIR and Wake pins are R30 bits; while the",
+        "ENDAT peripheral interface is selected, R30 byte 0 is the TX FIFO data byte, so pins in bits 0..7",
+        "are also written as FIFO data. The pin mapping of the peripheral mode has to be confirmed on a board."
     ].join("\n"),
 
     uiView: "graph",
@@ -167,24 +212,24 @@ var iolinkModule = {
         {
             name: "txBytes",
             displayName: "M-Sequence TX Bytes",
-            description: "Number of data bytes to transmit in the master frame (1..16). Preamble byte is added automatically in OPERATE mode.",
+            description: "Number of data bytes to transmit in the master frame (1..8, taken from the two 32-bit inputs, DATA_IN_LO byte 0 first). Each byte is sent as one 11-bit character.",
             default: 4,
             displayFormat: "dec"
         },
         {
             name: "rxBytes",
             displayName: "Response RX Bytes",
-            description: "Number of data bytes expected in the device response (0..16). 0 = receive phase skipped.",
+            description: "Number of data bytes expected in the device response (0..4, returned in output1, first byte most significant). 0 = receive phase skipped.",
             default: 4,
             displayFormat: "dec"
         },
         {
             name: "frameSizeBits",
             displayName: "Frame Size (bits)",
-            description: "Per-byte frame bits (start + 8 data + stop = 10 for IO-Link 8N1)",
-            default: 10,
+            description: "Per-byte frame bits (start + 8 data + even parity + stop = 11 for IO-Link, IEC 61131-9)",
+            default: 11,
             readOnly: true,
-            getValue: function() { return 10; }
+            getValue: function() { return FRAME_BITS; }
         },
         {
             name: "bitPeriodNs",
@@ -236,11 +281,18 @@ var iolinkModule = {
             default: 0,
             hidden: false
         },
-        { name: "opCode", default: "m_iolink_master", hidden: true },
+        {
+            name: "opCode",
+            default: "m_iolink_master_pru0",
+            hidden: true,
+            getValue: function() { return "m_iolink_master_pru" + getPruNumberFromContext(); }
+        },
         { name: "numOfInputPorts",   default: 2, hidden: true },
-        { name: "numOfOutputPorts",  default: 1, hidden: true },
+        { name: "numOfOutputPorts",  default: 2, hidden: true },
+        { name: "multiOutputMacroArgs", default: true, hidden: true },
         { name: "output1Size",       default: 4, hidden: true },
-        { name: "numOfConstants",    default: 9, hidden: true },
+        { name: "output2Size",       default: 4, hidden: true },
+        { name: "numOfConstants",    default: 10, hidden: true },
         { name: "constant1", default: 2, hidden: true, getValue: i => i.dirPin },
         { name: "constant2", default: 3, hidden: true, getValue: i => i.wakePin },
         { name: "constant3", default: 0, hidden: true, getValue: i => i.endatChannel },
@@ -250,6 +302,7 @@ var iolinkModule = {
         { name: "constant7", default: 5, hidden: true, getValue: i => i.turnaroundBitPeriods },
         { name: "constant8", default: 6400, hidden: true, getValue: i => i.wakeLoops },
         { name: "constant9", default: 0, hidden: true, getValue: i => i.mSeqPreambleBytes },
+        { name: "constant10", default: 103, hidden: true, getValue: i => baudToRxClockDiv(comModeToBaud(i.comMode)) },
         {
             name: "noOfCycles",
             displayName: "Number Of Cycles",
@@ -272,16 +325,17 @@ var iolinkModule = {
             { name: "next",    type: "IO_NEXT" },
             { name: "input1",  type: "input32" },
             { name: "input2",  type: "input32" },
-            { name: "output1", type: "output32" }
+            { name: "output1", type: "output32" },
+            { name: "output2", type: "output32" }
         ];
     },
 
     validate: function(inst, validation) {
-        if (inst.txBytes < 1 || inst.txBytes > 16) {
-            validation.logError("txBytes must be 1..16", inst, "txBytes");
+        if (inst.txBytes < 1 || inst.txBytes > 8) {
+            validation.logError("txBytes must be 1..8 (the two 32-bit inputs carry 8 payload bytes)", inst, "txBytes");
         }
-        if (inst.rxBytes < 0 || inst.rxBytes > 16) {
-            validation.logError("rxBytes must be 0..16", inst, "rxBytes");
+        if (inst.rxBytes < 0 || inst.rxBytes > 4) {
+            validation.logError("rxBytes must be 0..4 (the response is returned in one 32-bit output)", inst, "rxBytes");
         }
         if (inst.dirPin === inst.wakePin) {
             validation.logError("DIR pin and Wake pin must differ", inst, "dirPin");
@@ -310,11 +364,28 @@ var iolinkModule = {
     // Build macro assembly by joining lines.
     // Uses only basic string concatenation to avoid template literal pitfalls.
     getMacro: function(pruInstructionMacro, opCode) {
-        opCode = opCode || "m_iolink_master";
+        // The ENDAT configuration registers differ per core; the core is part of the macro name
+        // ("m_iolink_master_pru0" / "m_iolink_master_pru1"). Without a core suffix PRU0 is used.
+        var callParts = (pruInstructionMacro || "").trim().split(/\s*,\s*|\s+/);
+        var macroName = callParts[0] || opCode || "m_iolink_master_pru0";
+        var pru = macroName.indexOf("_pru1") >= 0 ? "1" : "0";
+        var gpcfgReg = "ICSS_CFG_GPCFG" + pru;
+        var txcfgReg = "ICSS_CFG_PRU" + pru + "_ENDAT_TXCFG";
+        var rxcfgReg = "ICSS_CFG_PRU" + pru + "_ENDAT_RXCFG";
+        var chCfgReg = function(ch) { return "ICSS_CFG_PRU" + pru + "_ENDAT_CH" + ch + "_CFG0"; };
+        var busyBit = { "0": 5, "1": 13, "2": 21 };
         var lines = [];
+        // Emit the per-channel variants of a code fragment as an assembler .if/.elseif/.else chain.
+        var perChannel = function(emit) {
+            for (var ch = 0; ch < 3; ch++) {
+                lines.push(ch === 0 ? "    .if CHANNEL == 0" : (ch === 1 ? "    .elseif CHANNEL == 1" : "    .else"));
+                emit(String(ch)).forEach(function(l) { lines.push(l); });
+            }
+            lines.push("    .endif");
+        };
 
         // ---- macro header ----
-        lines.push(opCode + " .macro RES, DATA_IN_LO, DATA_IN_HI, DIR_PIN, WAKE_PIN, CHANNEL, CLK_DIV, TX_BYTES, RX_BYTES, TURN_BITS, WAKE_LPS, PREAMBLE");
+        lines.push(macroName + " .macro RES, STATUS, DATA_IN_LO, DATA_IN_HI, DIR_PIN, WAKE_PIN, CHANNEL, CLK_DIV, TX_BYTES, RX_BYTES, TURN_BITS, WAKE_LPS, PREAMBLE, RX_CLK_DIV");
         lines.push("    ; ================================================================");
         lines.push("    ; m_iolink_master -- IO-Link master transaction engine");
         lines.push("    ;");
@@ -322,23 +393,26 @@ var iolinkModule = {
         lines.push("    ;   WAKE -> ENDAT TX (M-sequence) -> TURNAROUND -> ENDAT RX (response)");
         lines.push("    ;");
         lines.push("    ; Parameters:");
-        lines.push("    ;   RES         -- Destination register for received response bytes");
+        lines.push("    ;   RES         -- Destination register for received response bytes (first byte most significant)");
+        lines.push("    ;   STATUS      -- Receive status: bit 0 = parity error, bit 1 = framing error (start/stop bit)");
         lines.push("    ;   DATA_IN_LO  -- Register with lower 32 bits of TX payload");
         lines.push("    ;   DATA_IN_HI  -- Register with upper 32 bits of TX payload");
         lines.push("    ;   DIR_PIN     -- R30 bit for transceiver direction (0=RX, 1=TX)");
         lines.push("    ;   WAKE_PIN    -- R30 bit for wake-up pulse (driven low for WAKE_LPS)");
         lines.push("    ;   CHANNEL     -- ENDAT channel (0/1/2)");
-        lines.push("    ;   CLK_DIV     -- ENDAT TX clock divider");
-        lines.push("    ;   TX_BYTES    -- Number of payload bytes to TX (1..16)");
-        lines.push("    ;   RX_BYTES    -- Number of bytes expected from device (0..16, 0=skip RX)");
+        lines.push("    ;   CLK_DIV     -- ENDAT TX clock divider (1x baud rate)");
+        lines.push("    ;   TX_BYTES    -- Number of payload bytes to TX (1..8)");
+        lines.push("    ;   RX_BYTES    -- Number of bytes expected from device (0..4, 0=skip RX)");
         lines.push("    ;   TURN_BITS   -- Turnaround pause in bit periods (min 4)");
         lines.push("    ;   WAKE_LPS    -- Wake-up delay loop iterations (~5 cy/iter @ 200 MHz)");
         lines.push("    ;   PREAMBLE    -- Preamble byte value (0 = no preamble)");
+        lines.push("    ;   RX_CLK_DIV  -- ENDAT RX clock divider (8x baud rate)");
         lines.push("    ; ================================================================");
 
         // ---- register setup ----
         lines.push("    ; ---- register setup ----");
         lines.push("    ldi   RES, 0");
+        lines.push("    ldi   STATUS, 0");
         lines.push("    ldi   TEMP_REG1, 0");
         lines.push("    ldi   TEMP_REG2, 0");
         lines.push("    ldi   TEMP_REG3, 0");
@@ -366,111 +440,77 @@ var iolinkModule = {
 
         // ---- Phase 2: ENDAT TX configuration ----
         lines.push("    ; ======== Phase 2: Configure ENDAT TX ========");
-        lines.push("    ; Disable RX, assert global reinit");
+        lines.push("    ; Enable the transceiver driver and select peripheral mode first. Once the peripheral");
+        lines.push("    ; interface is active an R30 write also reaches the TX FIFO of the selected channel, so");
+        lines.push("    ; the global reinit below comes after the R30 writes above and flushes what they pushed.");
+        lines.push("    set     R30, R30, DIR_PIN");
         lines.push("    ldi     R30.b3, 0x00");
-        lines.push("    set     R31, R31, 19");
-        lines.push("    ; Poll reinit busy");
-        lines.push("    .if CHANNEL == 0");
-        lines.push("m_iolink_wait_reinit_tx?:");
-        lines.push("    qbbs    m_iolink_wait_reinit_tx?, R31, 5");
-        lines.push("    .elseif CHANNEL == 1");
-        lines.push("m_iolink_wait_reinit_tx?:");
-        lines.push("    qbbs    m_iolink_wait_reinit_tx?, R31, 13");
-        lines.push("    .else");
-        lines.push("m_iolink_wait_reinit_tx?:");
-        lines.push("    qbbs    m_iolink_wait_reinit_tx?, R31, 21");
-        lines.push("    .endif");
-        lines.push("    ldi     R30.b3, 0x00");
-        lines.push("    ; Set PRU0 peripheral mode via GPCFG0");
+        lines.push("    ; Set PRU" + pru + " peripheral mode via GPCFG" + pru);
         lines.push("    ldi32   TEMP_REG1, 0x04000000");
-        lines.push("    ldi     TEMP_REG2.w0, ICSS_CFG_GPCFG0");
+        lines.push("    ldi     TEMP_REG2.w0, " + gpcfgReg);
         lines.push("    sbco    &TEMP_REG1, ICSS_CFG, TEMP_REG2.w0, 4");
+        lines.push("    ; Global reinit (flushes the FIFOs), then poll reinit busy. R31 commands are written as a");
+        lines.push("    ; byte field: R31 reads back the channel status in the bit positions the write decodes as");
+        lines.push("    ; GO/reinit, so a read-modify-write (set R31, R31, n) could issue a command no one asked for.");
+        lines.push("    ldi     R31.b2, 0x08                    ; reinit (R31 bit 19)");
+        perChannel(function(ch) { return ["m_iolink_wait_reinit_tx?:", "    qbbs    m_iolink_wait_reinit_tx?, R31, " + busyBit[ch]]; });
+        lines.push("    ldi     R30.b3, 0x00");
         lines.push("    ; Configure TX clock: [31:16]=CLK_DIV, [4]=0 (192 MHz UART_CLK)");
         lines.push("    ldi     TEMP_REG1.w0, 0");
         lines.push("    ldi     TEMP_REG1.w2, CLK_DIV");
-        lines.push("    ldi     TEMP_REG2.w0, ICSS_CFG_PRU0_ENDAT_TXCFG");
+        lines.push("    ldi     TEMP_REG2.w0, " + txcfgReg);
         lines.push("    sbco    &TEMP_REG1, ICSS_CFG, TEMP_REG2.w0, 4");
-        lines.push("    ; Configure CHCFG0: frameSize=0 (continuous), bitSwap=1 (LSB-first)");
-        lines.push("    ldi     TEMP_REG1, 0");
-        lines.push("    set     TEMP_REG1, TEMP_REG1, 31");
-        lines.push("    .if CHANNEL == 0");
-        lines.push("    ldi     TEMP_REG2.w0, ICSS_CFG_PRU0_ENDAT_CH0_CFG0");
-        lines.push("    .elseif CHANNEL == 1");
-        lines.push("    ldi     TEMP_REG2.w0, ICSS_CFG_PRU0_ENDAT_CH1_CFG0");
-        lines.push("    .else");
-        lines.push("    ldi     TEMP_REG2.w0, ICSS_CFG_PRU0_ENDAT_CH2_CFG0");
-        lines.push("    .endif");
+        lines.push("    ; CHCFG0: [31]=bitSwap (LSB first), [27:16]=RX frame size, [15:11]=TX frame size,");
+        lines.push("    ; both " + FRAME_BITS + " (start + 8 data + parity + stop); TX is single-shot, one character per GO");
+        lines.push("    ldi32   TEMP_REG1, " + cfg0Hex);
+        perChannel(function(ch) { return ["    ldi     TEMP_REG2.w0, " + chCfgReg(ch)]; });
         lines.push("    sbco    &TEMP_REG1, ICSS_CFG, TEMP_REG2.w0, 4");
         lines.push("    ; Select channel with clk_mode=3");
-        lines.push("    .if CHANNEL == 0");
-        lines.push("    ldi     R30.w2, 0x0018");
-        lines.push("    .elseif CHANNEL == 1");
-        lines.push("    ldi     R30.w2, 0x0019");
-        lines.push("    .else");
-        lines.push("    ldi     R30.w2, 0x001A");
-        lines.push("    .endif");
+        perChannel(function(ch) { return ["    ldi     R30.w2, 0x001" + (8 + parseInt(ch)).toString(16).toUpperCase()]; });
 
-        // ---- Phase 3: Build and transmit M-sequence ----
+        // ---- Phase 3: transmit one UART character per payload byte ----
         lines.push("    ; ======== Phase 3: Transmit M-Sequence ========");
-        lines.push("    ; Enable TX driver for master transmission");
-        lines.push("    set     R30, R30, DIR_PIN");
-        lines.push("    ; Wait briefly (5 NOPs) for transceiver to turn on");
-        lines.push("    nop");
-        lines.push("    nop");
-        lines.push("    nop");
-        lines.push("    nop");
-        lines.push("    nop");
-        lines.push("    ; Pack TX data byte into 10-bit UART frame");
-        lines.push("    ; Frame: [0]=start(0), [8:1]=data, [9]=stop(1)");
-        lines.push("    ; SIMPLIFIED: pack byte 0 only (1-byte TX)");
-        lines.push("    ; Multi-byte M-sequences are not implemented: only byte 0 is sent");
-        lines.push("    mov     TEMP_REG4.b1, DATA_IN_LO   ; 8-bit data");
-        lines.push("    lsl     TEMP_REG4.b1, TEMP_REG4.b1, 1  ; shift for start bit");
-        lines.push("    set     TEMP_REG4.b1, TEMP_REG4.b1, 9  ; stop bit at position 9");
-        lines.push("    ; Place into TEMP_REG1 bits 9..0");
-        lines.push("    mov     TEMP_REG1.b0, TEMP_REG4.b1");
-        lines.push("    lsl     TEMP_REG4.b1, TEMP_REG4.b1, 8");
-        lines.push("    lsr     TEMP_REG1.b1, TEMP_REG4.b1, 8");
-        lines.push("    and     TEMP_REG1.b1, TEMP_REG1.b1, 0x03");
-
-        // ---- Phase 4: ENDAT TX FIFO load and start ----
-        lines.push("    ; ======== ENDAT TX FIFO Load ========");
-        lines.push("    ; TEMP_REG1 holds packed frame (up to 16 bits for 1 byte)");
-        lines.push("    ; Load into FIFO bitSwap=1 (LSB on wire)");
-        lines.push("    mov     R30.b0, TEMP_REG1.b0          ; Byte 0");
-        lines.push("    .if TX_BYTES >= 2");
-        lines.push("    mov     R30.b0, TEMP_REG1.b1          ; Byte 1");
-        lines.push("    .endif");
-        lines.push("    set     R31, R31, 18                  ; TX GO");
-        lines.push("    ; Wait for TX complete (poll busy)");
-        lines.push("    .if CHANNEL == 0");
-        lines.push("m_iolink_wait_tx?:");
-        lines.push("    qbbs    m_iolink_wait_tx?, R31, 5");
-        lines.push("    .elseif CHANNEL == 1");
-        lines.push("m_iolink_wait_tx?:");
-        lines.push("    qbbs    m_iolink_wait_tx?, R31, 13");
-        lines.push("    .else");
-        lines.push("m_iolink_wait_tx?:");
-        lines.push("    qbbs    m_iolink_wait_tx?, R31, 21");
-        lines.push("    .endif");
+        lines.push("    ; One 11-bit character per payload byte, byte 0 = DATA_IN_LO.b0 first (up to 8 bytes):");
+        lines.push("    ;   bit 0 = start (0), bits 8:1 = data LSB first, bit 9 = even parity, bit 10 = stop (1)");
+        lines.push("    ; The frame is built in a full register and pushed as two FIFO bytes (low byte first);");
+        lines.push("    ; with bitSwap set the low bit of each FIFO byte leaves first.");
+        for (var k = 0; k < 8; k++) {
+            var src = (k < 4 ? "DATA_IN_LO.b" + k : "DATA_IN_HI.b" + (k - 4));
+            if (k > 0) { lines.push("    .if TX_BYTES >= " + (k + 1)); }
+            lines.push("    mov     TEMP_REG1, " + src + "           ; data byte, zero-extended");
+            lines.push("    lsr     TEMP_REG2, TEMP_REG1, 4         ; even parity: xor-fold the data byte");
+            lines.push("    xor     TEMP_REG2, TEMP_REG2, TEMP_REG1");
+            lines.push("    lsr     TEMP_REG3, TEMP_REG2, 2");
+            lines.push("    xor     TEMP_REG2, TEMP_REG2, TEMP_REG3");
+            lines.push("    lsr     TEMP_REG3, TEMP_REG2, 1");
+            lines.push("    xor     TEMP_REG2, TEMP_REG2, TEMP_REG3");
+            lines.push("    and     TEMP_REG2, TEMP_REG2, 1         ; parity bit (1 when the data has an odd number of ones)");
+            lines.push("    lsl     TEMP_REG2, TEMP_REG2, 9");
+            lines.push("    lsl     TEMP_REG1, TEMP_REG1, 1         ; data to bits 8:1, start bit 0 stays 0");
+            lines.push("    or      TEMP_REG1, TEMP_REG1, TEMP_REG2");
+            lines.push("    set     TEMP_REG1, TEMP_REG1, 10        ; stop bit");
+            lines.push("    mov     R30.b0, TEMP_REG1.b0            ; FIFO byte 0: frame bits 7:0");
+            lines.push("    mov     R30.b0, TEMP_REG1.b1            ; FIFO byte 1: frame bits 10:8");
+            lines.push("    ldi     R31.b2, 0x04                    ; TX GO (R31 bit 18)");
+            perChannel(function(ch) { return ["m_iolink_wait_tx" + k + "?:", "    qbbs    m_iolink_wait_tx" + k + "?, R31, " + busyBit[ch]]; });
+            if (k > 0) { lines.push("    .endif ; TX_BYTES >= " + (k + 1)); }
+        }
         lines.push("    ; Disable TX driver");
         lines.push("    clr     R30, R30, DIR_PIN");
 
         // ---- Phase 5: Turnaround ----
         lines.push("    ; ======== Phase 5: Turnaround ========");
-        lines.push("    ; Wait TURN_BITS bit periods via nested delay loop");
-        lines.push("    ; Inner: ~174 iterations per bit (calibrated for COM3 @ 230.4k)");
+        lines.push("    ; Wait TURN_BITS bit periods: the bit period in PRU cycles is (CLK_DIV + 1) / 192 MHz");
+        lines.push("    ; at the 200 MHz PRU clock = (CLK_DIV + 1) * 25 / 24 cycles; the delay loop (sub, qbne)");
+        lines.push("    ; takes 2 cycles per iteration, so one bit period is (CLK_DIV + 1) * 25 / 48 iterations.");
         lines.push("    ldi     TEMP_REG1.w0, TURN_BITS");
-        lines.push("    ldi     TEMP_REG2.w0, 174");
-        lines.push("m_iolink_turn_check?:");
-        lines.push("    sub     TEMP_REG1.w0, TEMP_REG1.w0, 1");
-        lines.push("    qbeq    m_iolink_turn_done?, TEMP_REG1.w0, 0");
-        lines.push("    mov     TEMP_REG4.w0, TEMP_REG2.w0");
+        lines.push("m_iolink_turn_bit?:");
+        lines.push("    ldi     TEMP_REG2.w0, (CLK_DIV + 1) * 25 / 48");
         lines.push("m_iolink_turn_inner?:");
-        lines.push("    sub     TEMP_REG4.w0, TEMP_REG4.w0, 1");
-        lines.push("    qbne    m_iolink_turn_inner?, TEMP_REG4.w0, 0");
-        lines.push("    qbne    m_iolink_turn_check?, TEMP_REG1.w0, 1");
-        lines.push("m_iolink_turn_done?:");
+        lines.push("    sub     TEMP_REG2.w0, TEMP_REG2.w0, 1");
+        lines.push("    qbne    m_iolink_turn_inner?, TEMP_REG2.w0, 0");
+        lines.push("    sub     TEMP_REG1.w0, TEMP_REG1.w0, 1");
+        lines.push("    qbne    m_iolink_turn_bit?, TEMP_REG1.w0, 0");
         lines.push("    nop");
         lines.push("    nop");
 
@@ -479,88 +519,78 @@ var iolinkModule = {
         lines.push("    .if RX_BYTES > 0");
         lines.push("    ; ENDAT reinit for RX");
         lines.push("    ldi     R30.b3, 0x00");
-        lines.push("    set     R31, R31, 19");
-        lines.push("    .if CHANNEL == 0");
-        lines.push("m_iolink_wait_reinit_rx?:");
-        lines.push("    qbbs    m_iolink_wait_reinit_rx?, R31, 5");
-        lines.push("    .elseif CHANNEL == 1");
-        lines.push("m_iolink_wait_reinit_rx?:");
-        lines.push("    qbbs    m_iolink_wait_reinit_rx?, R31, 13");
-        lines.push("    .else");
-        lines.push("m_iolink_wait_reinit_rx?:");
-        lines.push("    qbbs    m_iolink_wait_reinit_rx?, R31, 21");
-        lines.push("    .endif");
+        lines.push("    ldi     R31.b2, 0x08                    ; reinit (R31 bit 19)");
+        perChannel(function(ch) { return ["m_iolink_wait_reinit_rx?:", "    qbbs    m_iolink_wait_reinit_rx?, R31, " + busyBit[ch]]; });
         lines.push("    ldi     R30.b3, 0x00");
-        lines.push("    ; Configure RXCFG: oversample=0 (1x), clkDiv=CLK_DIV");
-        lines.push("    ldi     TEMP_REG1.w0, 0");
-        lines.push("    ldi     TEMP_REG1.w2, CLK_DIV");
-        lines.push("    ldi     TEMP_REG2.w0, ICSS_CFG_PRU0_ENDAT_RXCFG");
+        lines.push("    ; RXCFG: [31:16]=RX_CLK_DIV, [4]=0 (192 MHz UART_CLK), [3]=0 (start bit is low),");
+        lines.push("    ; [2:0]=7 (8x oversampling: one FIFO sample per eighth of a bit)");
+        lines.push("    ldi     TEMP_REG1.w0, 7");
+        lines.push("    ldi     TEMP_REG1.w2, RX_CLK_DIV");
+        lines.push("    ldi     TEMP_REG2.w0, " + rxcfgReg);
         lines.push("    sbco    &TEMP_REG1, ICSS_CFG, TEMP_REG2.w0, 4");
-        lines.push("    ; Configure CHCFG0: frameSize=10, bitSwap=1 (LSB first)");
-        lines.push("    ldi     TEMP_REG1, 0");
-        lines.push("    set     TEMP_REG1, TEMP_REG1, 31");
-        lines.push("    ldi     TEMP_REG1.w0, (10 << 11)");
-        lines.push("    .if CHANNEL == 0");
-        lines.push("    ldi     TEMP_REG2.w0, ICSS_CFG_PRU0_ENDAT_CH0_CFG0");
-        lines.push("    .elseif CHANNEL == 1");
-        lines.push("    ldi     TEMP_REG2.w0, ICSS_CFG_PRU0_ENDAT_CH1_CFG0");
-        lines.push("    .else");
-        lines.push("    ldi     TEMP_REG2.w0, ICSS_CFG_PRU0_ENDAT_CH2_CFG0");
-        lines.push("    .endif");
+        lines.push("    ; CHCFG0: same value as for TX (RX_FRAME_SIZE [27:16] = " + FRAME_BITS + " bits)");
+        lines.push("    ldi32   TEMP_REG1, " + cfg0Hex);
+        perChannel(function(ch) { return ["    ldi     TEMP_REG2.w0, " + chCfgReg(ch)]; });
         lines.push("    sbco    &TEMP_REG1, ICSS_CFG, TEMP_REG2.w0, 4");
-        lines.push("    ; Enable RX");
-        lines.push("    .if CHANNEL == 0");
-        lines.push("    set     R30, R30, 24");
-        lines.push("    .elseif CHANNEL == 1");
-        lines.push("    set     R30, R30, 25");
-        lines.push("    .else");
-        lines.push("    set     R30, R30, 26");
-        lines.push("    .endif");
-        lines.push("    ; Poll for valid frame byte");
+        lines.push("    ; One UART character per iteration: re-arm RX (rx_en low then high resets the frame");
+        lines.push("    ; counter and flags), then read " + FRAME_BITS + " bit samples (start .. stop), LSB first.");
+        lines.push("    ; The receiver delivers one FIFO sample per sampling period, so a bit is one sample; the");
+        lines.push("    ; sample of bit 4 of the oversampling window is the middle of the bit cell.");
         lines.push("    ldi     TEMP_REG3.b0, RX_BYTES");
         lines.push("m_iolink_rx_next_byte?:");
-        lines.push("    ; Poll valid flag");
-        lines.push("    .if CHANNEL == 0");
-        lines.push("m_iolink_rx_wait_valid?:");
-        lines.push("    qbbc    m_iolink_rx_wait_valid?, R31, 24");
-        lines.push("    .elseif CHANNEL == 1");
-        lines.push("m_iolink_rx_wait_valid?:");
-        lines.push("    qbbc    m_iolink_rx_wait_valid?, R31, 25");
-        lines.push("    .else");
-        lines.push("m_iolink_rx_wait_valid?:");
-        lines.push("    qbbc    m_iolink_rx_wait_valid?, R31, 26");
-        lines.push("    .endif");
-        lines.push("    ; Read FIFO byte and accumulate in RES");
-        lines.push("    mov     TEMP_REG4.b0, R30.b0");
+        lines.push("    ldi     R30.b3, 0x00");
+        perChannel(function(ch) { return ["    ldi     R30.b3, " + (1 << parseInt(ch))]; });
+        lines.push("    ldi     TEMP_REG1, 0                    ; bit accumulator, new bits enter at bit 31");
+        lines.push("    ldi     TEMP_REG4.b0, 0                 ; samples read");
+        lines.push("m_iolink_rx_bit?:");
+        perChannel(function(ch) { return [
+            "    qbbc    m_iolink_rx_bit?, R31, " + (24 + parseInt(ch)) + "              ; valid flag of the channel",
+            "    mov     TEMP_REG2.b0, R31.b" + ch + "           ; sample window of the channel",
+            "    ldi     R31.b3, " + (1 << parseInt(ch)) + "                    ; clear the valid flag (write 1)"]; });
+        lines.push("    lsr     TEMP_REG1, TEMP_REG1, 1");
+        lines.push("    qbbc    m_iolink_rx_zero?, TEMP_REG2.b0, 4");
+        lines.push("    set     TEMP_REG1, TEMP_REG1, 31");
+        lines.push("m_iolink_rx_zero?:");
+        lines.push("    add     TEMP_REG4.b0, TEMP_REG4.b0, 1");
+        lines.push("    qbgt    m_iolink_rx_bit?, TEMP_REG4.b0, " + FRAME_BITS);
+        lines.push("    ; Align: bit 0 = start, bits 8:1 = data, bit 9 = parity, bit 10 = stop");
+        lines.push("    lsr     TEMP_REG1, TEMP_REG1, " + (32 - FRAME_BITS));
+        lines.push("    ; Framing: start must be 0, stop must be 1 (STATUS bit 1)");
+        lines.push("    qbbc    m_iolink_rx_start_ok?, TEMP_REG1, 0");
+        lines.push("    or      STATUS, STATUS, 2");
+        lines.push("m_iolink_rx_start_ok?:");
+        lines.push("    qbbs    m_iolink_rx_stop_ok?, TEMP_REG1, 10");
+        lines.push("    or      STATUS, STATUS, 2");
+        lines.push("m_iolink_rx_stop_ok?:");
+        lines.push("    ; Parity: data and parity bit together must hold an even number of ones (STATUS bit 0)");
+        lines.push("    lsr     TEMP_REG4, TEMP_REG1, 1");
+        lines.push("    clr     TEMP_REG4, TEMP_REG4, 9         ; data bits and parity bit, without the stop bit");
+        lines.push("    lsr     TEMP_REG2, TEMP_REG4, 8");
+        lines.push("    xor     TEMP_REG4, TEMP_REG4, TEMP_REG2");
+        lines.push("    lsr     TEMP_REG2, TEMP_REG4, 4");
+        lines.push("    xor     TEMP_REG4, TEMP_REG4, TEMP_REG2");
+        lines.push("    lsr     TEMP_REG2, TEMP_REG4, 2");
+        lines.push("    xor     TEMP_REG4, TEMP_REG4, TEMP_REG2");
+        lines.push("    lsr     TEMP_REG2, TEMP_REG4, 1");
+        lines.push("    xor     TEMP_REG4, TEMP_REG4, TEMP_REG2");
+        lines.push("    qbbc    m_iolink_rx_parity_ok?, TEMP_REG4, 0");
+        lines.push("    or      STATUS, STATUS, 1");
+        lines.push("m_iolink_rx_parity_ok?:");
+        lines.push("    ; Data byte into RES, first received byte in the most significant position");
+        lines.push("    lsr     TEMP_REG1, TEMP_REG1, 1");
+        lines.push("    and     TEMP_REG1, TEMP_REG1, 0xFF");
         lines.push("    lsl     RES, RES, 8");
-        lines.push("    or      RES, RES, TEMP_REG4.b0");
-        lines.push("    ; Clear valid flag by toggling RX");
-        lines.push("    .if CHANNEL == 0");
-        lines.push("    clr     R30, R30, 24");
-        lines.push("    set     R30, R30, 24");
-        lines.push("    .elseif CHANNEL == 1");
-        lines.push("    clr     R30, R30, 25");
-        lines.push("    set     R30, R30, 25");
-        lines.push("    .else");
-        lines.push("    clr     R30, R30, 26");
-        lines.push("    set     R30, R30, 26");
-        lines.push("    .endif");
+        lines.push("    or      RES, RES, TEMP_REG1");
         lines.push("    sub     TEMP_REG3.b0, TEMP_REG3.b0, 1");
         lines.push("    qbne    m_iolink_rx_next_byte?, TEMP_REG3.b0, 0");
         lines.push("    ; Disable RX");
-        lines.push("    .if CHANNEL == 0");
-        lines.push("    clr     R30, R30, 24");
-        lines.push("    .elseif CHANNEL == 1");
-        lines.push("    clr     R30, R30, 25");
-        lines.push("    .else");
-        lines.push("    clr     R30, R30, 26");
-        lines.push("    .endif");
+        lines.push("    ldi     R30.b3, 0x00");
         lines.push("    .endif ; RX_BYTES > 0");
 
         // ---- Phase 7: Cleanup ----
         lines.push("    ; ======== Phase 7: Cleanup ========");
         lines.push("    clr     R30, R30, DIR_PIN");
-        lines.push("    set     R31, R31, 19");
+        lines.push("    ldi     R31.b2, 0x08                    ; reinit (R31 bit 19)");
         lines.push("    ldi     TEMP_REG1.w0, 20");
         lines.push("m_iolink_cleanup_delay?:");
         lines.push("    sub     TEMP_REG1.w0, TEMP_REG1.w0, 1");

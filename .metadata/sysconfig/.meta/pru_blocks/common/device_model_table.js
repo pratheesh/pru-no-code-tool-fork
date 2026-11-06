@@ -398,7 +398,8 @@ function toBinding(inst) {
  */
 const READER_BLOCKS = {
     bissc: [{ module: "/pru_blocks/application_specific/biss_c_initiator_block", dataPinField: "dataPin" }],
-    ssi:   [{ module: "/pru_blocks/application_specific/ssi_initiator_block", dataPinField: "dataPin" }]
+    ssi:   [{ module: "/pru_blocks/application_specific/ssi_initiator_block", dataPinField: "dataPin" }],
+    endat: [{ module: "/pru_blocks/application_specific/endat_initiator_block", dataPinField: "dataRxPin" }]
 };
 
 /**

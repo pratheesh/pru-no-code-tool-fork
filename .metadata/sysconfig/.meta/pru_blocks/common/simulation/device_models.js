@@ -186,6 +186,8 @@ class QuadratureEncoder {
 // samples on rising edges and shares nothing with this model.
 
 function toGray(value) {
+    // BigInt input is handled exactly: JS bitwise operators on numbers are 32-bit.
+    if (typeof value === "bigint") return value ^ (value >> BigInt(1));
     return value ^ (value >> 1);
 }
 
@@ -277,18 +279,19 @@ class SsiEncoder {
             // First edge of a frame: latch the position NOW. Everything after
             // this reads the snapshot, so the shaft turning mid-word cannot
             // tear the value - the whole point of a latched protocol.
-            const raw = this.position & ((1 << this.bits) - 1);
-            this._latched = (this.gray ? toGray(raw) : raw) >>> 0;
+            // BigInt: frames up to 64 bits wide, which 32-bit bitwise operators cannot mask or shift.
+            const raw = BigInt.asUintN(this.bits, BigInt(Math.trunc(this.position)));
+            this._latched = this.gray ? toGray(raw) : raw;
             this._bitIndex = 1;
-            this._data = (this._latched >> (this.bits - 1)) & 1;
+            this._data = Number((this._latched >> BigInt(this.bits - 1)) & BigInt(1));
         } else if (this._bitIndex < this.bits) {
             this._bitIndex += 1;
-            this._data = (this._latched >> (this.bits - this._bitIndex)) & 1;
+            this._data = Number((this._latched >> BigInt(this.bits - this._bitIndex)) & BigInt(1));
         } else if (this._bitIndex === this.bits) {
             this._bitIndex = this.bits + 1;
             this._data = 0;           // trailing low for the monoflop
             this._events.push({ cycle: cycle, kind: "frame",
-                                position: this.position, sent: this._latched, bits: this.bits });
+                                position: this.position, sent: Number(this._latched), bits: this.bits });
         } else {
             this._faults.push(
                 `cycle ${cycle}: clock continued past the end of the ${this.bits}-bit word ` +

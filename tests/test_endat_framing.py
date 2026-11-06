@@ -295,7 +295,10 @@ def test_red_de_held_contends_with_the_encoder():
 
 def test_red_wrong_lead_in_misframes_the_command():
     """t1Clocks=3 instead of the 2T lead-in (H p.8)."""
-    r = run(build(ROOT, "lead3", "inst.t1Clocks = 3;\n"), 1)
+    # validate() rejects t1Clocks != 2; relax that one check to put the bad value on the wire
+    root = _scratch_root("lead3", lambda t: _swap(
+        t, 'validation.logError("EnDat sends the mode command', 'validation.logWarning("EnDat sends the mode command'))
+    r = run(build(root, "lead3", "inst.t1Clocks = 3;\n"), 1)
     with pytest.raises(AssertionError,
                        match=r"firmware status 0x2 \(no start bit\).*mode command redundancy error"):
         assert_decoded(r, 1)
@@ -326,7 +329,10 @@ def test_firmware_holds_the_clock_high_for_the_recovery_time():
 
 
 def test_red_short_trec_returns_inside_the_recovery_time():
-    r = run(build(ROOT, "trec500", "inst.trecCycles = 500;\n"), 1)
+    # validate() rejects trecCycles < 1000; relax that one check to put the short value on the wire
+    root = _scratch_root("trec500", lambda t: _swap(
+        t, 'validation.logError("trecCycles must be', 'validation.logWarning("trecCycles must be'))
+    r = run(build(root, "trec500", "inst.trecCycles = 500;\n"), 1)
     with pytest.raises(AssertionError, match=r"firmware returned \d+ cycles after the CRC, < tm 2000"):
         assert_waits_recovery(r)
 
@@ -357,6 +363,34 @@ def test_dead_line_reports_no_start_bit_within_the_timeout():
     assert r.halted
     assert r.status == 0b0010, f"dead line: status {r.status:#x}, expected 0x2 (no start bit)"
     assert r.res == 0
+
+
+
+def reported_cycles(**inst):
+    """noOfCycles the block reports for an instance with the block's defaults plus `inst`."""
+    import json
+    js = ("const {loadBlockModule} = require(process.argv[1] + '/scripts/dual_oracle_harness.js');"
+          "const m = loadBlockModule('endat_initiator_block', 'application_specific');"
+          "const i = Object.assign({totalBits: 30, halfPeriodCycles: 25, t1Clocks: 2, trtCycles: 20,"
+          " trecCycles: 1000, timeoutCycles: 100}, JSON.parse(process.argv[2]));"
+          "process.stdout.write(String(m.config.find(c => c.name === 'noOfCycles').getValue(i)));")
+    out = subprocess.run(["node", "-e", js, str(ROOT), json.dumps(inst)], capture_output=True,
+                         text=True, timeout=60, check=True)
+    return int(out.stdout)
+
+
+def test_reported_cycle_budget_covers_the_start_bit_timeout():
+    """The block clocks up to timeoutCycles pulses hunting for the start bit; a dead line
+    takes all of them, and the reported budget must cover that worst case."""
+    r = _run_dev(build(ROOT, "green"), _FixedLine(0))
+    assert r.halted and r.status == 0b0010
+    budget = reported_cycles()
+    assert r.cycles <= budget, f"dead line took {r.cycles} cycles, reported budget {budget}"
+
+
+def test_reported_cycle_budget_grows_with_the_start_bit_timeout():
+    pulse = 4 + 4 * 25
+    assert reported_cycles(timeoutCycles=200) - reported_cycles(timeoutCycles=100) == 100 * (pulse + 6)
 
 
 def test_stuck_high_line_reads_as_crc_and_f1_not_no_start_bit():
@@ -419,3 +453,22 @@ def test_red_pin_collisions_are_rejected(name, settings):
 def test_distinct_pins_pass_validation():
     code, out = _validate("distinct", "inst.dataEnPin = 5;\n")
     assert code == 0 and COLLISION not in out, out
+
+
+# --- start-up and recovery timing options are rejected when the framing cannot honour them ------
+
+
+@pytest.mark.parametrize("name,settings,message", [
+    ("t1_3", "inst.t1Clocks = 3;\n", "EnDat sends the mode command after two clock pulses"),
+    ("t1_1", "inst.t1Clocks = 1;\n", "EnDat sends the mode command after two clock pulses"),
+    ("trec_999", "inst.trecCycles = 999;\n", "trecCycles must be at least 1000"),
+    ("trec_500", "inst.trecCycles = 500;\n", "trecCycles must be at least 1000"),
+])
+def test_red_unsupported_t1_and_trec_are_errors(name, settings, message):
+    code, out = _validate(name, settings)
+    assert code != 0 and message in out, out
+
+
+def test_default_t1_and_minimum_trec_pass_validation():
+    code, out = _validate("t1_trec_ok", "inst.trecCycles = 1000;\n")
+    assert code == 0, out

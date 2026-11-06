@@ -82,3 +82,48 @@ def test_ssi_timeout_is_not_offered_as_a_working_control():
     assert got["hidden"] is True
     assert "2=timeout" not in got["macro"]
     assert "and timeout" not in got["desc"]
+
+
+def ssi_errors(**fields):
+    return node_eval("ssi_initiator_block", fields, "(m.validate(i,v),errors)")
+
+
+def test_ssi_defaults_are_valid():
+    assert ssi_errors() == []
+
+
+@pytest.mark.parametrize("fields, valid", [
+    # payload ST13 + MT12 = 25 bits
+    (dict(totalWidth=25), True),
+    (dict(totalWidth=25, parityEnable=True), False),        # parity bit would be read as payload
+    (dict(totalWidth=25, errorBitEnable=True), False),
+    (dict(totalWidth=26, parityEnable=True), True),
+    (dict(totalWidth=26, errorBitEnable=True), True),
+    (dict(totalWidth=26, parityEnable=True, errorBitEnable=True), False),
+    (dict(totalWidth=27, parityEnable=True, errorBitEnable=True), True),
+    (dict(totalWidth=24), False),
+])
+def test_ssi_payload_must_fit_the_frame_after_parity_and_error_bits(fields, valid):
+    errors = ssi_errors(**fields)
+    assert (errors == []) == valid, errors
+    if not valid:
+        assert [e[1] for e in errors] == ["singleTurnBits"]
+
+
+def ipc_errors(name):
+    return node_eval("ipc_shared_mem_block", {"variableName": name}, "(m.validate(i,v),errors)")
+
+
+def test_ipc_default_variable_name_is_valid():
+    assert ipc_errors("encoder_data") == []
+
+
+@pytest.mark.parametrize("name", ["", "   ", "1data", "my-var", "my var", "a.b", " lead"])
+def test_ipc_blank_or_malformed_variable_name_is_a_validation_error(name):
+    """A blank name reached the macro as an empty operand and only failed at assembly."""
+    assert [e[1] for e in ipc_errors(name)] == ["variableName"]
+
+
+@pytest.mark.parametrize("name", ["_x", "X1", "shared_write_2"])
+def test_ipc_identifier_names_are_accepted(name):
+    assert ipc_errors(name) == []

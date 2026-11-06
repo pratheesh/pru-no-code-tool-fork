@@ -235,9 +235,10 @@ function getMacro(pruInstructionMacro, opCode) {
     else if (macroName.includes("_4x")) middleBit = "2";
     else middleBit = "4";
 
-    // UART character = 10 bits (1 start + 8 data + 1 stop), LSB first.
-    const frameBits = 10;
-    const alignShift = 32 - frameBits; // 22: position of the start bit after reception
+    // Modbus RTU character = 11 bits, LSB first: 1 start + 8 data + parity (8E1/8O1) or a
+    // second stop bit (8N2) + 1 stop. The bits after the 8 data bits are consumed, not decoded.
+    const frameBits = 11;
+    const alignShift = 32 - frameBits; // 21: position of the start bit after reception
 
     let body = "";
 
@@ -268,11 +269,12 @@ mb_wait_reinit?:\n\
     ldi     TEMP_REG1.w2, " + clockDiv + "\n\
     ldi     TEMP_REG2.w0, " + rxcfgReg + "\n\
     sbco    &TEMP_REG1, ICSS_CFG, TEMP_REG2.w0, 4\n\
-    ldi     TEMP_REG1.w0, 0\n\
-    ldi     TEMP_REG1.w2, " + frameBits + "   ; frame size in bits [27:16]\n\
-    set     TEMP_REG1, TEMP_REG1, 31   ; bitSwap = LSB first (standard UART)\n\
-    ldi     TEMP_REG2.w0, " + chCfg0Reg + "\n\
-    sbco    &TEMP_REG1, ICSS_CFG, TEMP_REG2.w0, 4\n\
+    ; RX frame size [27:16] and bitSwap [31] live in bytes 2-3 of CH_CFG0; write only\n\
+    ; those two bytes so the paired transmitter's settings in bytes 0-1 are kept\n\
+    ldi     TEMP_REG1.w0, " + frameBits + "   ; frame size in bits (CFG0 bits [27:16])\n\
+    set     TEMP_REG1.w0, TEMP_REG1.w0, 15   ; CFG0 bit 31: bitSwap = LSB first (standard UART)\n\
+    ldi     TEMP_REG2.w0, " + chCfg0Reg + " + 2\n\
+    sbco    &TEMP_REG1.w0, ICSS_CFG, TEMP_REG2.w0, 2\n\
     ldi     r30.b3, " + r30b3Enable + "   ; enable RX on channel " + channel + "\n\
 \n\
     ; ===== Modbus RTU delimiting: measured 3.5-character-time silence =====\n\
@@ -313,7 +315,7 @@ mb_next_bit?:\n\
     and     TEMP_REG1, TEMP_REG1, TEMP_REG2\n\
     ; append byte to frame buffer; frames beyond 255 bytes drop the excess\n\
     ; (truncation then fails the CRC check and reports status 1)\n\
-    qbgt    mb_no_store?, " + frameReg + ".b1, 254\n\
+    qblt    mb_no_store?, " + frameReg + ".b1, 254\n\
     ldi32   TEMP_REG2, " + bufSymbol + "\n\
     sbbo    &TEMP_REG1, TEMP_REG2, " + frameReg + ".b1, 1\n\
     add     " + frameReg + ".b1, " + frameReg + ".b1, 1\n\
@@ -321,7 +323,7 @@ mb_no_store?:\n\
     qba     mb_wait_char?               ; restart the silence watchdog\n\
 \n\
 mb_frame_check?:\n\
-    qble    mb_status_short?, " + frameReg + ".b1, 3   ; need addr+fnc+CRC2\n\
+    qbge    mb_status_short?, " + frameReg + ".b1, 3   ; need addr+fnc+CRC2\n\
     ; ---- CRC-16 (Modbus: reflected 0xA001, init 0xFFFF) over length-2 bytes ----\n\
     ; No MULL on PRU: table lookup + shifts + XOR only.\n\
     ; CRC lives in " + frameReg + ".b2 (low) / .b3 (high); .b0 is the buffer pointer.\n\
@@ -335,7 +337,9 @@ mb_crc_next?:\n\
     lbbo    &TEMP_REG2.b1, TEMP_REG1, " + frameReg + ".b0, 1\n\
     xor     TEMP_REG2.b0, " + frameReg + ".b2, TEMP_REG2.b1\n\
     ldi32   TEMP_REG1, " + lutSymbol + "\n\
-    lbbo    &TEMP_REG2.w0, TEMP_REG1, TEMP_REG2.b0, 2\n\
+    ldi     TEMP_REG2.b1, 0\n\
+    lsl     TEMP_REG2.w0, TEMP_REG2.w0, 1   ; table index x 2 = byte offset of the 2-byte entry\n\
+    lbbo    &TEMP_REG2.w0, TEMP_REG1, TEMP_REG2.w0, 2\n\
     mov     " + frameReg + ".b2, " + frameReg + ".b3   ; crc >>= 8\n\
     ldi     " + frameReg + ".b3, 0\n\
     xor     " + frameReg + ".b2, " + frameReg + ".b2, TEMP_REG2.b0\n\

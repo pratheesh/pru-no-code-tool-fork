@@ -653,8 +653,13 @@ function buildDeviceBindings(inst) {
             params = null;
         }
 
-        const clockPin = inst[`gpi${pinNum}_deviceClockPin`];
-        const indexPin = inst[`gpi${pinNum}_deviceIndexPin`];
+        // The EFFECTIVE companion pins (user field, else the bound block's own pin), the
+        // same ones validation and the in-tool simulator use, so a design the GUI accepts
+        // reaches the Python binding with the clock pin it relies on.
+        const kind = inst[`gpi${pinNum}_deviceKind`];
+        const effective = devicePinDefaults(inst, pinNum, kind);
+        const clockPin = effective.clockPin;
+        const indexPin = effective.indexPin;
 
         bindings.push({
             primaryPin: pinNum,
@@ -686,9 +691,8 @@ function buildDeviceBindings(inst) {
  * conflict check. Returns [{pinNum, kind, pins: [{pin, label}]}].
  * Uses the EFFECTIVE companion pins (devicePinDefaults), the same pins the
  * device would really be wired to, not just the raw fields.
- * BuildDeviceBindings emits the RAW fields (an unset companion pin is null in the
- * manifest); this check claims the effective pin on purpose - the device is wired there either
- * way, so a Device Model on that pin is a real short even though the manifest omits it.
+ * buildDeviceBindings emits the same effective pins, so the manifest and this check agree on
+ * where the device is wired.
  */
 function collectGpiDeviceClaims(inst) {
     const claims = [];
@@ -1668,6 +1672,7 @@ function reportRegisterExhaustion(inst, report) {
             : "Out of registers: block '" + f.block + "' needs " + f.bytes + " byte(s) for " + f.what +
             " but only " + f.freeBytes + " of the " + f.budgetBytes + " allocatable bytes (R0-R" + (f.budgetRegisters - 1) +
             ", " + f.budgetRegisters + " registers; R28/R29 are reserved) are free, so its instruction cannot be generated. " +
+            (f.scratchBytes > 0 ? f.scratchBytes + " byte(s) are held for the macro scratch registers " + f.scratchRegisters.join("/") + " (R26/R27) that blocks in the design use. " : "") +
             (f.pinnedBytes > 0 ? f.pinnedBytes + " byte(s) of the pool are pinned by registers typed into block fields (" +
                 f.pinnedBy.join(", ") + ") and are not available to the allocator. " : "") +
             "Reduce the number of values alive at once, or store intermediate results to memory.";
@@ -2327,7 +2332,9 @@ function validateXfr2spinGlobal(inst, report) {
         if (!ipc[crossField]) continue;
         const varName = String(ipc[writer.spec.variableField] || "").trim();
         const guards = spinInstances.filter((s) => varOf(s) === varName && varName !== "");
-        const guardAcquires = guards.filter(isAcquire);
+        // try_acquire makes a single arbitration attempt and execution continues whether or not the
+        // flag was won, so it cannot protect a write that follows it unconditionally.
+        const guardAcquires = guards.filter((g) => opOf(g) === "acquire");
         const guardReleases = guards.filter(isRelease);
 
         if (guardAcquires.length === 0 || guardReleases.length === 0) {
@@ -2336,7 +2343,8 @@ function validateXfr2spinGlobal(inst, report) {
                 "another core writes it too, but no XFR2SPIN acquire/release pair names it in " +
                 "'Protects shared variable'. Two cores writing one region with no hardware lock is " +
                 "a silent race. The ICSSG spinlock (SPRUIM2J Table 6-60, XFR2SPIN 0x90) exists for " +
-                "exactly this case: add an acquire before the write and a release after it.",
+                "exactly this case: add an acquire before the write and a release after it. A try_acquire " +
+                "does not count, because execution continues whether or not the lock was won.",
                 ipc, crossField);
             continue;
         }
@@ -2495,20 +2503,18 @@ function validateXfr2psiGlobal(inst, report) {
                     if (!bInst || !bInst.output1) continue;
                     for (const conn of bInst.output1) {
                         if (conn && conn.inst && conn.inst.$name && afterSet.has(conn.inst.$name)) {
-                            // This producer's value is live across XFR2PSI.
-                            // Check if its allocated register is R3 (byte offset 12) or overlaps R1:R5.
-                            // We use the allocator's byteOffset if exposed; else flag generically.
-                            // Try to retrieve allocation via summary instance? fallback to generic R3 warning.
-                            let overlaps = false;
-                            let regName = "R3";
-                            try {
-                                // pruRegisterAllocator internal map not exported; use allocator getter if available
-                                const alloc = pruRegisterAllocator.getPruRegisterAllocationSummary ? null : null;
-                                // Check byte offset via moduleInstanceRegisterMap global (indirect)
-                                // We cannot access private map; so we conservatively treat any such crossing as R3 overlap
-                                // and report. The mutation test for this arm is designed to create a crossing with R3 live.
-                                overlaps = true;
-                            } catch(e) { overlaps = true; }
+                            // This producer's value is live across XFR2PSI. It is only a fault when the
+                            // allocator placed that value inside R1:R5 (the XFRPSI data window).
+                            let alloc = "";
+                            try { alloc = pruRegisterAllocator.getBlockRegisterAllocation(bName) || ""; } catch (e) { alloc = ""; }
+                            const hit = [];
+                            for (const part of String(alloc).split(",")) {
+                                if (part.indexOf("(") !== -1) continue;   // loop counter / group return address
+                                const m = /^\s*R(\d+)/.exec(part);
+                                if (m && Number(m[1]) >= 1 && Number(m[1]) <= 5) hit.push("R" + m[1]);
+                            }
+                            const overlaps = hit.length > 0;
+                            const regName = hit.join(", ");
                             if (overlaps) {
                                 report.logError(
                                     `XFR2PSI uses R1:R5 as XFRPSI data path (Table 6-111, R5:R1 [159:0]). Design holds live value from '${bName}' in ${regName} across XFR2PSI transfer '${xfrName}' — would be silently corrupted. Move the producer/consumer to avoid live-across or copy through memory.`,
@@ -2881,7 +2887,9 @@ function getDevicePadSharing(deviceData, coreName) {
 
     // 2. Raw JSON device data structure (ICSSM devices, stubs and test harnesses). ICSSG pads carry a
     // PRGx_PRUy_GPOn + PRGx_PRUy_GPIn pair; ICSSM pads carry one two-way PRx_PRUy_GPIOn signal.
-    const infos = deviceData.pinCommonInfos || {};
+    // No usable pin data from any source: report "unknown" (null), not "no pad is shared" (an empty set).
+    const infos = deviceData.pinCommonInfos;
+    if (!infos || typeof infos !== 'object' || Object.keys(infos).length === 0) return null;
     for (const info of Object.values(infos)) {
         if (!info || !info.pinModeInfo) continue;
         const sigs = new Set(info.pinModeInfo.map(m => m.signalName));

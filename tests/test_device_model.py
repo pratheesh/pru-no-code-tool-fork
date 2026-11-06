@@ -543,6 +543,18 @@ def test_the_manifest_reader_table_and_the_blocks_reader_table_are_the_same():
     assert readers and all(v and v[0]["module"].startswith("/pru_blocks/") for v in readers.values()), readers
 
 
+def test_an_endat_initiator_reading_the_bound_data_pin_is_found_as_the_reader():
+    """The EnDat encoder kind has a clock-driver rule for the EnDat initiator; the initiator must also be
+    registered as its reader, or the manifest and the Device Model display find no decoding block."""
+    readers = node_json("t.READER_BLOCKS")
+    assert readers["endat"] == [{"module": "/pru_blocks/application_specific/endat_initiator_block",
+                                 "dataPinField": "dataRxPin"}]
+    mod = "/pru_blocks/application_specific/endat_initiator_block"
+    found = node_json("t.findReaderInstances('endat', 2, {%s: {$instances: [{dataRxPin: 2}, {dataRxPin: 5}]}}).map(r => r.inst.dataRxPin)"
+                      % json.dumps(mod))
+    assert found == [2]
+
+
 def test_with_no_device_model_the_merged_builder_returns_exactly_the_gpi_builder_output():
     src = (META / "pru_blocks" / "common" / "pru_blocks_static_module.syscfg.js").read_text(encoding="utf-8").replace("\r\n", "\n")
 
@@ -551,7 +563,7 @@ def test_with_no_device_model_the_merged_builder_returns_exactly_the_gpi_builder
         rest = src[start:]
         return rest[:rest.index("\n}\n") + 2]
 
-    script = ("const t = require(%s);\nconst deviceModelTable = t;\n%s\n%s\n"
+    script = ("const t = require(%s);\nconst deviceModelTable = t;\n%s\n%s\n%s\n"
               "const inst = {pruClkFreq: 200, pruCyclesToSimulate: 2000, signalsToDisplayR31: ['1','4']};\n"
               "for (let p = 0; p <= 19; p++) { inst['gpi'+p+'_inputMode']='timestamp'; inst['gpi'+p+'_deviceKind']='ssi';"
               " inst['gpi'+p+'_deviceClockPin']=-1; inst['gpi'+p+'_deviceIndexPin']=-1; inst['gpi'+p+'_deviceParams']='{}'; }\n"
@@ -561,7 +573,8 @@ def test_with_no_device_model_the_merged_builder_returns_exactly_the_gpi_builder
               " a === JSON.stringify(buildDeviceBindingsWithModels(inst, undefined)),"
               " a === JSON.stringify(buildDeviceBindingsWithModels(inst, {'/pru_blocks/utils/device_model_block': {$instances: []}})),"
               " JSON.parse(a).bindings.length]));\n"
-              % (json.dumps(str(TABLE_JS)), extract("buildDeviceBindings"), extract("buildDeviceBindingsWithModels")))
+              % (json.dumps(str(TABLE_JS)), extract("devicePinDefaults"), extract("buildDeviceBindings"),
+                 extract("buildDeviceBindingsWithModels")))
     res = subprocess.run(["node", "-e", script], capture_output=True, text=True)
     assert res.returncode == 0, res.stderr
     assert json.loads(res.stdout) == [True, True, True, 1]
