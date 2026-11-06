@@ -237,8 +237,9 @@ function extractClaims(insts) {
                 problems.push(`${name}: getPinUsage returned an entry without a GPO/GPI dir`);
                 continue;
             }
-            const pin = parseInt(p.pin);
-            if (isNaN(pin)) {
+            // a pin is a whole R30/R31 bit number: a non-negative integer, or a string of digits only
+            const pin = (typeof p.pin === 'number' || (typeof p.pin === 'string' && /^\d+$/.test(p.pin))) ? Number(p.pin) : NaN;
+            if (!Number.isInteger(pin) || pin < 0 || pin > 31) {
                 problems.push(`${name}: unparseable ${p.dir} pin "${String(p.pin)}"`);
                 continue;
             }
