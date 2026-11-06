@@ -22,7 +22,7 @@ The BiSS-C Initiator block clocks a BiSS-C encoder's MA line from a PRU output p
 
 ### How It Works
 
-For each bit the block pulls MA low, waits one instruction, drives MA high and samples SLO into the least significant bit of the result after shifting it left. The bit period is fixed by the instruction sequence (8 PRU cycles in the TI pru-simulator).
+For each bit the block pulls MA low, waits one instruction, drives MA high and samples SLO into the least significant bit of the result after shifting it left. The bit period is set by the instruction sequence, not by a timer: a bit takes 8 PRU cycles when the sampled SLO bit is 1 and 7 when it is 0 (counted in the TI pru-simulator), so the MA period depends on the data.
 
 ### Important Notes
 
