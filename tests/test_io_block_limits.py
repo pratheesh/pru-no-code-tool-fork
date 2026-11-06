@@ -4,6 +4,8 @@
 - stepper numSteps and quadrature sampleCycles are loaded into 16-bit registers.
 - encoder_speed, capture and sdfm expose only options their macros implement.
 - the AM261x palette does not list the ICSSG-only xfr2psi block.
+- validateXfr2psiGlobal reports a value live across a transfer only when it was allocated in R1:R5.
+- validateXfr2spinGlobal does not accept try_acquire as protection for a cross-core write.
 
 Validators run through scripts/block_validate_runner.js and scripts/static_global_runner.js,
 which load the shipped sources.
@@ -113,3 +115,66 @@ def test_am261x_palette_omits_icssg_only_xfr2psi(core):
 
 def test_am64x_palette_keeps_xfr2psi():
     assert "/pru_blocks/pru_io_blocks/xfr2psi_block" in palette("am64x", "icss_g0_pru0")
+
+
+# ---------------------------------------------------------------- xfr2psi live-across
+
+PSI = "/pru_blocks/pru_io_blocks/xfr2psi_block"
+
+
+def psi_spec(alloc):
+    return {
+        "validator": "validateXfr2psiGlobal",
+        "modules": {
+            "/pru_blocks/data_handling/arithmetic_block": [
+                {"$name": "PROD", "output1": [{"inst": "CONS"}]}, {"$name": "CONS"}],
+            PSI: [{"$name": "XFR", "checkReady": True}],
+        },
+        "order": ["PROD", "XFR", "CONS"],
+        "allocations": {"PROD": alloc},
+    }
+
+
+def run_global(spec):
+    return node("scripts/static_global_runner.js", json.dumps(spec))
+
+
+@pytest.mark.parametrize("alloc", ["R1", "R3", "R5", "R4.w2"])
+def test_value_allocated_in_psi_window_across_xfr2psi_is_refused(alloc):
+    errs = run_global(psi_spec(alloc))
+    assert len(errs) == 1 and alloc.split(".")[0] in errs[0], errs
+
+
+@pytest.mark.parametrize("alloc", ["R6", "R10", "R0", "-", "R7 (loop)"])
+def test_value_allocated_outside_psi_window_across_xfr2psi_is_accepted(alloc):
+    assert run_global(psi_spec(alloc)) == []
+
+
+# ---------------------------------------------------------------- xfr2spin cross-core guard
+
+SPIN = "/pru_blocks/pru_io_blocks/xfr2spin_block"
+WRITER = {"module": "/test/writer_block", "label": "Writer", "crossCoreField": "otherCoreWrites",
+          "variableField": "variable"}
+
+
+def spin_spec(first_op):
+    return {
+        "validator": "validateXfr2spinGlobal",
+        "writers": [WRITER],
+        "modules": {
+            "/test/writer_block": [{"$name": "W", "otherCoreWrites": True, "variable": "shared"}],
+            SPIN: [
+                {"$name": "L1", "operation": first_op, "lockId": 3, "protectsVariable": "shared"},
+                {"$name": "L2", "operation": "release", "lockId": 3, "protectsVariable": "shared"},
+            ],
+        },
+    }
+
+
+def test_acquire_release_guards_a_cross_core_write():
+    assert run_global(spin_spec("acquire")) == []
+
+
+def test_try_acquire_does_not_guard_a_cross_core_write():
+    errs = run_global(spin_spec("try_acquire"))
+    assert len(errs) == 1 and "try_acquire" in errs[0] and "'W'" in errs[0], errs

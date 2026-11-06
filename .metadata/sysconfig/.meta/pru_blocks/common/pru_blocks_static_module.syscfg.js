@@ -2313,7 +2313,9 @@ function validateXfr2spinGlobal(inst, report) {
         if (!ipc[crossField]) continue;
         const varName = String(ipc[writer.spec.variableField] || "").trim();
         const guards = spinInstances.filter((s) => varOf(s) === varName && varName !== "");
-        const guardAcquires = guards.filter(isAcquire);
+        // try_acquire makes a single arbitration attempt and execution continues whether or not the
+        // flag was won, so it cannot protect a write that follows it unconditionally.
+        const guardAcquires = guards.filter((g) => opOf(g) === "acquire");
         const guardReleases = guards.filter(isRelease);
 
         if (guardAcquires.length === 0 || guardReleases.length === 0) {
@@ -2322,7 +2324,8 @@ function validateXfr2spinGlobal(inst, report) {
                 "another core writes it too, but no XFR2SPIN acquire/release pair names it in " +
                 "'Protects shared variable'. Two cores writing one region with no hardware lock is " +
                 "a silent race. The ICSSG spinlock (SPRUIM2J Table 6-60, XFR2SPIN 0x90) exists for " +
-                "exactly this case: add an acquire before the write and a release after it.",
+                "exactly this case: add an acquire before the write and a release after it. A try_acquire " +
+                "does not count, because execution continues whether or not the lock was won.",
                 ipc, crossField);
             continue;
         }
@@ -2481,20 +2484,18 @@ function validateXfr2psiGlobal(inst, report) {
                     if (!bInst || !bInst.output1) continue;
                     for (const conn of bInst.output1) {
                         if (conn && conn.inst && conn.inst.$name && afterSet.has(conn.inst.$name)) {
-                            // This producer's value is live across XFR2PSI.
-                            // Check if its allocated register is R3 (byte offset 12) or overlaps R1:R5.
-                            // We use the allocator's byteOffset if exposed; else flag generically.
-                            // Try to retrieve allocation via summary instance? fallback to generic R3 warning.
-                            let overlaps = false;
-                            let regName = "R3";
-                            try {
-                                // pruRegisterAllocator internal map not exported; use allocator getter if available
-                                const alloc = pruRegisterAllocator.getPruRegisterAllocationSummary ? null : null;
-                                // Check byte offset via moduleInstanceRegisterMap global (indirect)
-                                // We cannot access private map; so we conservatively treat any such crossing as R3 overlap
-                                // and report. The mutation test for this arm is designed to create a crossing with R3 live.
-                                overlaps = true;
-                            } catch(e) { overlaps = true; }
+                            // This producer's value is live across XFR2PSI. It is only a fault when the
+                            // allocator placed that value inside R1:R5 (the XFRPSI data window).
+                            let alloc = "";
+                            try { alloc = pruRegisterAllocator.getBlockRegisterAllocation(bName) || ""; } catch (e) { alloc = ""; }
+                            const hit = [];
+                            for (const part of String(alloc).split(",")) {
+                                if (part.indexOf("(") !== -1) continue;   // loop counter / group return address
+                                const m = /^\s*R(\d+)/.exec(part);
+                                if (m && Number(m[1]) >= 1 && Number(m[1]) <= 5) hit.push("R" + m[1]);
+                            }
+                            const overlaps = hit.length > 0;
+                            const regName = hit.join(", ");
                             if (overlaps) {
                                 report.logError(
                                     `XFR2PSI uses R1:R5 as XFRPSI data path (Table 6-111, R5:R1 [159:0]). Design holds live value from '${bName}' in ${regName} across XFR2PSI transfer '${xfrName}' — would be silently corrupted. Move the producer/consumer to avoid live-across or copy through memory.`,
