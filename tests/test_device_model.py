@@ -543,6 +543,18 @@ def test_the_manifest_reader_table_and_the_blocks_reader_table_are_the_same():
     assert readers and all(v and v[0]["module"].startswith("/pru_blocks/") for v in readers.values()), readers
 
 
+def test_an_endat_initiator_reading_the_bound_data_pin_is_found_as_the_reader():
+    """The EnDat encoder kind has a clock-driver rule for the EnDat initiator; the initiator must also be
+    registered as its reader, or the manifest and the Device Model display find no decoding block."""
+    readers = node_json("t.READER_BLOCKS")
+    assert readers["endat"] == [{"module": "/pru_blocks/application_specific/endat_initiator_block",
+                                 "dataPinField": "dataRxPin"}]
+    mod = "/pru_blocks/application_specific/endat_initiator_block"
+    found = node_json("t.findReaderInstances('endat', 2, {%s: {$instances: [{dataRxPin: 2}, {dataRxPin: 5}]}}).map(r => r.inst.dataRxPin)"
+                      % json.dumps(mod))
+    assert found == [2]
+
+
 def test_with_no_device_model_the_merged_builder_returns_exactly_the_gpi_builder_output():
     src = (META / "pru_blocks" / "common" / "pru_blocks_static_module.syscfg.js").read_text(encoding="utf-8").replace("\r\n", "\n")
 
