@@ -57,6 +57,7 @@ flowchart LR
 ## Validation rules
 
 - sclBit and sdaBit must differ
+- addr7 must be a 7-bit address (0x00 to 0x7F)
 
 ## Generated macro (`.xdt` equivalent)
 

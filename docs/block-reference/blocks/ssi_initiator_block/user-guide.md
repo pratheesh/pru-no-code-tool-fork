@@ -6,7 +6,7 @@
 
 Synchronous SSI absolute encoder initiator (generic).
 
-Generic synchronous SSI initiator with configurable frame width (8-32), single-turn/multi-turn extraction, clock polarity/rate, optional parity and error bits, and gray/binary decode. A stuck-data timeout is not implemented: the block waits for the data line as the frame demands.
+Generic synchronous SSI initiator with configurable frame width (8-32), single-turn/multi-turn extraction, clock polarity/rate, optional parity and error bits, and gray/binary decode. output1 is the frame (position payload above the error/parity bits); output2 is the check status: 0 = ok, 1 = parity error, 4 = error bit active, 5 = both (always 0 when neither check is enabled). A stuck-data timeout is not implemented: the block waits for the data line as the frame demands.
 
 Peripheral resources: bit-bangs one R30 clock output and one R31 data input; no PRU peripherals (IEP/MAC/SPAD) required. Pinmux: clock and data must be on distinct PRU R30/R31 bits routed through PRU-ICSSG pinmux (AM64x/AM243x/AM261x). Isolation: single PRU slice owns both pins during transfer; concurrent workloads must not drive the same R30 bit and must avoid R31 contention. Deterministic timing: each clock half-period uses halfPeriodCycles delay-loop iterations, each costing two PRU cycles; monoTimeCycles likewise counts two-cycle idle iterations. The per-bit clock path costs about 4*halfPeriodCycles plus instruction overhead. TIMEOUT_CYCLES is reserved and does not run a delay loop. BOM: RS-422/RS-485 transceiver required for differential SSI (e.g. AM26C31/32); no BOM change for single-ended test. Simulator validates logical shift, gray decode, parity and extraction; physical propagation delay, transceiver skew and monoflop timing require silicon validation.
 
@@ -35,6 +35,7 @@ Peripheral resources: bit-bangs one R30 clock output and one R31 data input; no 
 | `prev` | `IO_PREV` |
 | `next` | `IO_NEXT` |
 | `output1` | `output32` |
+| `output2` | `output32` |
 
 ## How to use
 

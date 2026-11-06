@@ -14,8 +14,7 @@ flowchart LR
   classDef core fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:#000;
   CORE(("SDFM (Sigma-Delta Filter Module)\n[oneshot]")):::core
   CFG0["Filter Channel"]:::config -.-> CORE
-  CFG1["Over Sampling Ratio (OSR)"]:::config -.-> CORE
-  CFG2["Number Of Cycles"]:::config -.-> CORE
+  CFG1["Number Of Cycles"]:::config -.-> CORE
 ```
 
 
@@ -32,7 +31,6 @@ flowchart LR
 | Parameter | Display name | Default | Options |
 |---|---|---|---|
 | `filterChannel` | Filter Channel | `0` | `0`, `1`, `2`, `3` |
-| `osr` | Over Sampling Ratio (OSR) | `64` | — |
 | `noOfCycles` | Number Of Cycles | `10` | — |
 
 ## Ports

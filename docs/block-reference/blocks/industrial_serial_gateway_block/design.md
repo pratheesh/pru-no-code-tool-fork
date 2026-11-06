@@ -134,18 +134,15 @@ m_serial_gateway_run .macro STATUS, TX_DATA_REG, TX_CMD_REG, MODE, BAUDRATE_DIV,
     add   TEMP_REG2.w0, TEMP_REG3.w2, 4
     lbco  &TEMP_REG2.w0, c24, TEMP_REG2.w0, 4
     .endif
-    qbeq  sg_rx_phase, TEMP_REG1, TEMP_REG2.w0
+    qbeq  sg_rx_phase?, TEMP_REG1, TEMP_REG2.w0
     ; read payload slot: offset = ((readPtr & mask) << log2) + MB_BASE + 8
     ldi   TEMP_REG4.w2, (1 << MB_SLOT_LOG2) - 1
     and   TEMP_REG4.w2, TEMP_REG2.w0, TEMP_REG4.w2
     lsl   TEMP_REG4.w2, TEMP_REG4.w2, MB_SLOT_LOG2
     add   TEMP_REG4.w2, TEMP_REG4.w2, TEMP_REG3.w2
     add   TEMP_REG4.w2, TEMP_REG4.w2, 8
-    .if MB_IS_SHARED == 1
-    lbco  &TEMP_REG3, c28, TEMP_REG4.w2, MB_SLOT_BYTES
-    .else
-    lbco  &TEMP_REG3, c24, TEMP_REG4.w2, MB_SLOT_BYTES
-    .endif
+    ; the slot payload is not read into registers yet: UART TX is not implemented, and a
+    ; MB_SLOT_BYTES load at TEMP_REG3 would overwrite the mailbox base and reach R30/R31
     ; increment PRU read ptr (TEMP_REG1 = masked (ptr+1))
     add   TEMP_REG1, TEMP_REG2.w0, 1
     ldi   TEMP_REG4.w2, (1 << MB_SLOT_LOG2) - 1
@@ -160,19 +157,19 @@ m_serial_gateway_run .macro STATUS, TX_DATA_REG, TX_CMD_REG, MODE, BAUDRATE_DIV,
     ; DIR = TX
     set   R30, R30, DIR_PIN
     ldi   TEMP_REG4.w0, TURNAROUND
-sg_tx_turn:
+sg_tx_turn?:
     sub   TEMP_REG4.w0, TEMP_REG4.w0, 1
-    qbne  sg_tx_turn, TEMP_REG4.w0, 0
+    qbne  sg_tx_turn?, TEMP_REG4.w0, 0
     ; turnaround delay then DIR = RX
     ldi   TEMP_REG4.w0, TURNAROUND
-sg_tx_done:
+sg_tx_done?:
     sub   TEMP_REG4.w0, TEMP_REG4.w0, 1
-    qbne  sg_tx_done, TEMP_REG4.w0, 0
+    qbne  sg_tx_done?, TEMP_REG4.w0, 0
     clr   R30, R30, DIR_PIN
     .if COLL_EN == 1
     ; collision echo placeholder
     .endif
-sg_rx_phase:
+sg_rx_phase?:
     ; Phase 2: RX mailbox publish
     clr   R30, R30, DIR_PIN
     ldi   TEMP_REG3.w2, MB_BASE
@@ -188,9 +185,9 @@ sg_rx_phase:
     add   TEMP_REG4.w2, TEMP_REG4.w2, 8
     add   STATUS, STATUS, 1
     .if MB_IS_SHARED == 1
-    sbco  &STATUS, c28, TEMP_REG4.w2, MB_SLOT_BYTES
+    sbco  &STATUS, c28, TEMP_REG4.w2, 4
     .else
-    sbco  &STATUS, c24, TEMP_REG4.w2, MB_SLOT_BYTES
+    sbco  &STATUS, c24, TEMP_REG4.w2, 4
     .endif
     add   TEMP_REG1, TEMP_REG1, 1
     and   TEMP_REG1, TEMP_REG1, TEMP_REG2.w2

@@ -35,7 +35,7 @@ flowchart LR
 | `mode` | Mode | `wait` | `wait`, `signal`, `waitThenSignal` |
 | `inputEventBit` | Input Event R31 Bit | `30` | — |
 | `outputEvent` | Output System Event | `16` | — |
-| `clearAfterWait` | Clear Event After Wait | `true` | — |
+| `clearAfterWait` | Clear Event After Wait | `false` | — |
 
 ## Ports
 
@@ -48,6 +48,7 @@ flowchart LR
 
 - inputEventBit must be 0..31
 - outputEvent must be a system event 16..31 (SPRUIM2J Table 6-67: R31 event-generate channels 0..15)
+- Clearing the event after the wait is not supported: R31 bit
 
 ## Generated macro (`.xdt` equivalent)
 
@@ -58,12 +59,10 @@ m_event_block	.macro RES, mode, inputEventBit, outputEvent, clearAfterWait
     .if (mode != 1) ; wait or waitThenSignal
 event_wait?:
     qbbc  event_wait?, R31, inputEventBit
-    .if (clearAfterWait == 1)
-    ; Clear/ack is SoC INTC-specific.
-    ldi   R0, inputEventBit
-    .endif
+    ; The clearAfterWait operand is not used: no event acknowledge is generated (see validate()).
     .endif
     .if (mode != 0) ; signal or waitThenSignal
+    ; R31 event generate: bit 5 strobe | channel (system event - 16), i.e. system event + 16
     ldi   R31.b0, outputEvent + 16
     .endif
 

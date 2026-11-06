@@ -44,7 +44,7 @@ flowchart LR
 - **Category:** Application-Specific
 - **Execution model (inferred):** `oneshot`
 - **Macro / opcode:** `m_endat_read`
-- **Data ports:** 0 in / 1 out · **Cycles:** `6538`
+- **Data ports:** 0 in / 1 out · **Cycles:** `17428`
 
 ## Parameter schema
 
@@ -63,7 +63,7 @@ flowchart LR
 | `trtCycles` | Turn-around Delay Loops (tRT) | `20` | — |
 | `trecCycles` | Recovery Delay Loops (tRec) | `1000` | — |
 | `timeoutCycles` | Start-bit Timeout (clocks) | `100` | — |
-| `noOfCycles` | Number Of Cycles | `6538` | — |
+| `noOfCycles` | Number Of Cycles | `17428` | — |
 
 ## Ports
 
@@ -86,8 +86,9 @@ flowchart LR
 - dataEnPin must be 0..15
 - dataRxPin must be 0..15
 - halfPeriodCycles too small (min 2)
+- EnDat sends the mode command after two clock pulses (2T, H p.8); t1Clocks must be 2, other values misframe the command
 - timeoutCycles must be 1..65535
-- trecCycles below 500 violates the 10 us recovery time (need >=1000 at 200 MHz)
+- trecCycles must be at least 1000 (2 cycles per loop = 2000 cycles = the 10 us recovery time at 200 MHz)
 
 ## Generated macro (`.xdt` equivalent)
 

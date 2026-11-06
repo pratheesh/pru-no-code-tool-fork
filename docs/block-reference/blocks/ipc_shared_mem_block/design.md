@@ -49,7 +49,8 @@ flowchart LR
 
 ## Validation rules
 
-- _(no explicit validate() rules)_
+- Variable name cannot be empty
+- Variable name must start with a letter or underscore and contain only letters, numbers, and underscores
 
 ## Generated macro (`.xdt` equivalent)
 

@@ -62,7 +62,7 @@
 | [Bitwise](blocks/bitwise_block/design.md) | `bitwise_block` | `oneshot` | 2/1 | `1` | — | — | [design](blocks/bitwise_block/design.md) · [guide](blocks/bitwise_block/user-guide.md) |
 | [BS RAM (ICSSG Broadside RAM)](blocks/bs_ram_block/design.md) | `bs_ram_block` | `oneshot` | 1/0 | `1` | `bs_ram` | — | [design](blocks/bs_ram_block/design.md) · [guide](blocks/bs_ram_block/user-guide.md) |
 | [BSWAP (ICSSG Byte Swap)](blocks/bswap_block/design.md) | `bswap_block` | `oneshot` | 1/1 | `2` | `bswap` | — | [design](blocks/bswap_block/design.md) · [guide](blocks/bswap_block/user-guide.md) |
-| [IQMath Park/Clarke Transform](blocks/iqmath_park_clarke_block/design.md) | `iqmath_park_clarke_block` | `oneshot` | 4/2 | `97` | `mac` | — | [design](blocks/iqmath_park_clarke_block/design.md) · [guide](blocks/iqmath_park_clarke_block/user-guide.md) |
+| [IQMath Park/Clarke Transform](blocks/iqmath_park_clarke_block/design.md) | `iqmath_park_clarke_block` | `oneshot` | 4/2 | `98` | `mac` | — | [design](blocks/iqmath_park_clarke_block/design.md) · [guide](blocks/iqmath_park_clarke_block/user-guide.md) |
 | [IQMath PID Controller](blocks/iqmath_pid_block/design.md) | `iqmath_pid_block` | `oneshot` | 2/1 | `50` | `mac` | — | [design](blocks/iqmath_pid_block/design.md) · [guide](blocks/iqmath_pid_block/user-guide.md) |
 | [Load Constant](blocks/load_constant_block/design.md) | `load_constant_block` | `oneshot` | 0/1 | `1` | — | — | [design](blocks/load_constant_block/design.md) · [guide](blocks/load_constant_block/user-guide.md) |
 | [MAC Hardware (Multiply-Accumulate)](blocks/mac_hw_block/design.md) | `mac_hw_block` | `oneshot` | 3/1 | `9` | `mac` | — | [design](blocks/mac_hw_block/design.md) · [guide](blocks/mac_hw_block/user-guide.md) |
@@ -88,12 +88,12 @@
 |---|---|---|---|---|---|---|---|
 | [BiSS-C Initiator](blocks/biss_c_initiator_block/design.md) | `biss_c_initiator_block` | `oneshot` | 0/1 | `500` | — | — | [design](blocks/biss_c_initiator_block/design.md) · [guide](blocks/biss_c_initiator_block/user-guide.md) |
 | [CRC](blocks/crc_block/design.md) | `crc_block` | `oneshot` | 2/1 | `1` | — | — | [design](blocks/crc_block/design.md) · [guide](blocks/crc_block/user-guide.md) |
-| [EnDat 2.2 Initiator](blocks/endat_initiator_block/design.md) | `endat_initiator_block` | `oneshot` | 0/1 | `6538` | — | — | [design](blocks/endat_initiator_block/design.md) · [guide](blocks/endat_initiator_block/user-guide.md) |
+| [EnDat 2.2 Initiator](blocks/endat_initiator_block/design.md) | `endat_initiator_block` | `oneshot` | 0/1 | `17428` | — | — | [design](blocks/endat_initiator_block/design.md) · [guide](blocks/endat_initiator_block/user-guide.md) |
 | [Industrial Serial Gateway](blocks/industrial_serial_gateway_block/design.md) | `industrial_serial_gateway_block` | `oneshot` | 2/1 | `5000` | — | — | [design](blocks/industrial_serial_gateway_block/design.md) · [guide](blocks/industrial_serial_gateway_block/user-guide.md) |
-| [IO-Link Master](blocks/iolink_master_block/design.md) | `iolink_master_block` | `oneshot` | 2/1 | `50000` | — | — | [design](blocks/iolink_master_block/design.md) · [guide](blocks/iolink_master_block/user-guide.md) |
+| [IO-Link Master](blocks/iolink_master_block/design.md) | `iolink_master_block` | `oneshot` | 2/2 | `50000` | — | — | [design](blocks/iolink_master_block/design.md) · [guide](blocks/iolink_master_block/user-guide.md) |
 | [IPC Shared Memory](blocks/ipc_shared_mem_block/design.md) | `ipc_shared_mem_block` | `oneshot` | 1/0 | `4` | — | — | [design](blocks/ipc_shared_mem_block/design.md) · [guide](blocks/ipc_shared_mem_block/user-guide.md) |
 | [Modbus RTU Framer](blocks/modbus_rtu_framer/design.md) | `modbus_rtu_framer` | `continuous` | 0/1 | `40` | — | — | [design](blocks/modbus_rtu_framer/design.md) · [guide](blocks/modbus_rtu_framer/user-guide.md) |
-| [SSI Initiator](blocks/ssi_initiator_block/design.md) | `ssi_initiator_block` | `oneshot` | 0/1 | `1345` | — | — | [design](blocks/ssi_initiator_block/design.md) · [guide](blocks/ssi_initiator_block/user-guide.md) |
+| [SSI Initiator](blocks/ssi_initiator_block/design.md) | `ssi_initiator_block` | `oneshot` | 0/2 | `1345` | — | — | [design](blocks/ssi_initiator_block/design.md) · [guide](blocks/ssi_initiator_block/user-guide.md) |
 
 ### Utilities (10)
 

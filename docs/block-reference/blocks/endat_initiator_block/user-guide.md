@@ -33,7 +33,7 @@ Peripheral resources (selection rule): the hard EnDat peripheral (PRU-ICSSG thre
 | `trtCycles` | Turn-around Delay Loops (tRT) | `20` | — |
 | `trecCycles` | Recovery Delay Loops (tRec) | `1000` | — |
 | `timeoutCycles` | Start-bit Timeout (clocks) | `100` | — |
-| `noOfCycles` | Number Of Cycles | `6538` | — |
+| `noOfCycles` | Number Of Cycles | `17428` | — |
 
 ## Ports
 

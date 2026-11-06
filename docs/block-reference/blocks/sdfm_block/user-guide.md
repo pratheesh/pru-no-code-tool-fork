@@ -13,7 +13,6 @@ Interfaces with the SDFM peripheral to read phase currents for motor control loo
 | Parameter | Display name | Default | Options |
 |---|---|---|---|
 | `filterChannel` | Filter Channel | `0` | `0`, `1`, `2`, `3` |
-| `osr` | Over Sampling Ratio (OSR) | `64` | — |
 | `noOfCycles` | Number Of Cycles | `10` | — |
 
 ## Ports

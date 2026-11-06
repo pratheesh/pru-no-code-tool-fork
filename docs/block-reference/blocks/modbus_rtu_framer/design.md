@@ -263,11 +263,12 @@ mb_wait_reinit?:
     ldi     TEMP_REG1.w2, clockDiv
     ldi     TEMP_REG2.w0, ICSS_CFG_PRU1_ENDAT_RXCFG
     sbco    &TEMP_REG1, ICSS_CFG, TEMP_REG2.w0, 4
-    ldi     TEMP_REG1.w0, 0
-    ldi     TEMP_REG1.w2, 10   ; frame size in bits [27:16]
-    set     TEMP_REG1, TEMP_REG1, 31   ; bitSwap = LSB first (standard UART)
-    ldi     TEMP_REG2.w0, ICSS_CFG_PRU1_ENDAT_CH2_CFG0
-    sbco    &TEMP_REG1, ICSS_CFG, TEMP_REG2.w0, 4
+    ; RX frame size [27:16] and bitSwap [31] live in bytes 2-3 of CH_CFG0; write only
+    ; those two bytes so the paired transmitter's settings in bytes 0-1 are kept
+    ldi     TEMP_REG1.w0, 11   ; frame size in bits (CFG0 bits [27:16])
+    set     TEMP_REG1.w0, TEMP_REG1.w0, 15   ; CFG0 bit 31: bitSwap = LSB first (standard UART)
+    ldi     TEMP_REG2.w0, ICSS_CFG_PRU1_ENDAT_CH2_CFG0 + 2
+    sbco    &TEMP_REG1.w0, ICSS_CFG, TEMP_REG2.w0, 2
     ldi     r30.b3, 0x04   ; enable RX on channel 2
 
     ; ===== Modbus RTU delimiting: measured 3.5-character-time silence =====
@@ -283,7 +284,7 @@ mb_gap_loop?:
     qbeq    mb_wait_char?, frameReg.b1, 0   ; idle line (no frame yet): keep listening
     qba     mb_frame_check?              ; frame boundary declared here
 mb_char_rx?:
-    ; receive one 10-bit UART character (per-bit valid-flag polling loop)
+    ; receive one 11-bit UART character (per-bit valid-flag polling loop)
     ldi     TEMP_REG1, 0
     ldi     TEMP_REG2.b0, 0
 mb_bit_loop?:
@@ -298,8 +299,8 @@ mb_got_one?:
     set     TEMP_REG1, TEMP_REG1, 31
 mb_next_bit?:
     add     TEMP_REG2.b0, TEMP_REG2.b0, 1
-    qbne    mb_bit_loop?, TEMP_REG2.b0, 10
-    ldi     TEMP_REG2.w0, 22
+    qbne    mb_bit_loop?, TEMP_REG2.b0, 11
+    ldi     TEMP_REG2.w0, 21
     lsr     TEMP_REG1, TEMP_REG1, TEMP_REG2.w0
     lsr     TEMP_REG1, TEMP_REG1, 1     ; drop start bit
     ldi     TEMP_REG2, 1
@@ -308,7 +309,7 @@ mb_next_bit?:
     and     TEMP_REG1, TEMP_REG1, TEMP_REG2
     ; append byte to frame buffer; frames beyond 255 bytes drop the excess
     ; (truncation then fails the CRC check and reports status 1)
-    qbgt    mb_no_store?, frameReg.b1, 254
+    qblt    mb_no_store?, frameReg.b1, 254
     ldi32   TEMP_REG2, bufSymbol
     sbbo    &TEMP_REG1, TEMP_REG2, frameReg.b1, 1
     add     frameReg.b1, frameReg.b1, 1
@@ -316,7 +317,7 @@ mb_no_store?:
     qba     mb_wait_char?               ; restart the silence watchdog
 
 mb_frame_check?:
-    qble    mb_status_short?, frameReg.b1, 3   ; need addr+fnc+CRC2
+    qbge    mb_status_short?, frameReg.b1, 3   ; need addr+fnc+CRC2
     ; ---- CRC-16 (Modbus: reflected 0xA001, init 0xFFFF) over length-2 bytes ----
     ; No MULL on PRU: table lookup + shifts + XOR only.
     ; CRC lives in frameReg.b2 (low) / .b3 (high); .b0 is the buffer pointer.
@@ -330,7 +331,9 @@ mb_crc_next?:
     lbbo    &TEMP_REG2.b1, TEMP_REG1, frameReg.b0, 1
     xor     TEMP_REG2.b0, frameReg.b2, TEMP_REG2.b1
     ldi32   TEMP_REG1, lutSymbol
-    lbbo    &TEMP_REG2.w0, TEMP_REG1, TEMP_REG2.b0, 2
+    ldi     TEMP_REG2.b1, 0
+    lsl     TEMP_REG2.w0, TEMP_REG2.w0, 1   ; table index x 2 = byte offset of the 2-byte entry
+    lbbo    &TEMP_REG2.w0, TEMP_REG1, TEMP_REG2.w0, 2
     mov     frameReg.b2, frameReg.b3   ; crc >>= 8
     ldi     frameReg.b3, 0
     xor     frameReg.b2, frameReg.b2, TEMP_REG2.b0

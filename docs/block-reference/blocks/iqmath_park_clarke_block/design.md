@@ -24,14 +24,14 @@ flowchart LR
 - **Category:** Data Handling
 - **Execution model (inferred):** `oneshot`
 - **Macro / opcode:** `m_iqmath_transform`
-- **Data ports:** 4 in / 2 out · **Cycles:** `97`
+- **Data ports:** 4 in / 2 out · **Cycles:** `98`
 
 ## Parameter schema
 
 | Parameter | Display name | Default | Options |
 |---|---|---|---|
 | `transformType` | Transform Type | `Forward` | `Forward`, `Inverse` |
-| `noOfCycles` | Number Of Cycles | `97` | — |
+| `noOfCycles` | Number Of Cycles | `98` | — |
 
 ## Ports
 
@@ -53,8 +53,9 @@ flowchart LR
 ## Generated macro (`.xdt` equivalent)
 
 ```asm
-m_iqmath_transform .macro OUT1, OUT1_HI, IN1, IN2, IN3, THETA, IS_FORWARD
-    ; OUT1_HI: high word of the 8-byte output (the register after OUT1, written through OUT1)
+m_iqmath_transform .macro OUT1, OUT2, IN1, IN2, IN3, THETA, IS_FORWARD
+    ; OUT1 = D (Ialpha for the inverse transform), OUT2 = Q (Ibeta for the inverse transform).
+    ; OUT1 doubles as a scratch register until the final stores; OUT2 is written last.
     ; --- Forward Clarke & Park (real Q12 fixed-point) ---
     .if IS_FORWARD == 1
     ; --- Clarke ---
@@ -160,10 +161,11 @@ d_done?:
 q_pos?:
     lsr   TEMP_REG3, TEMP_REG3, 12
 q_done?:
-    ; Store Q right after D and load both into OUT1 (8 bytes).
+    ; Store Q right after D, then load D into OUT1 and Q into OUT2.
     ldi32 TEMP_REG2, 0x400
     sbbo  &TEMP_REG3, TEMP_REG2, 4, 4
-    lbbo  &OUT1, TEMP_REG2, 0, 8
+    lbbo  &OUT1, TEMP_REG2, 0, 4
+    lbbo  &OUT2, TEMP_REG2, 4, 4
     .else
     ; --- Inverse Park ---
     ; Convention: TI motor_control_sdk IPARK_run (rtlibs/transforms/ipark/ipark.h):
@@ -274,7 +276,8 @@ ib_div_pos?:
 ib_div_done?:
     ; Ib is in TEMP_REG3; Ia (Ialpha) is already at [0x400].
     sbbo  &TEMP_REG3, TEMP_REG2, 4, 4
-    lbbo  &OUT1, TEMP_REG2, 0, 8
+    lbbo  &OUT1, TEMP_REG2, 0, 4
+    lbbo  &OUT2, TEMP_REG2, 4, 4
     .endif
     .endm
 

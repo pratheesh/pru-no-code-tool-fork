@@ -56,7 +56,7 @@ flowchart LR
 ## Validation rules
 
 - aBit, bBit, and zBit must differ
-- sampleCycles must be >= 1
+- sampleCycles must be a whole number from 1 to 65535 (the delay counter is a 16-bit register)
 
 ## Generated macro (`.xdt` equivalent)
 

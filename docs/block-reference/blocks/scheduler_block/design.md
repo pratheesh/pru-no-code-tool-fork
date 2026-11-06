@@ -50,7 +50,7 @@ flowchart LR
 ## Validation rules
 
 - contextSwitchOverhead must be >= 0
-- task1_id must be 0..31 or 255
+- timerSource
 
 ## Generated macro (`.xdt` equivalent)
 

@@ -13,7 +13,7 @@ Emits parameterized capture logic to measure pulse widths, frequencies, or time 
 | Parameter | Display name | Default | Options |
 |---|---|---|---|
 | `measurementType` | Measurement Type | `pulseWidth` | `pulseWidth`, `frequency`, `timeBetweenEdges` |
-| `triggerSource` | Trigger Source | `iep` | `iep`, `gpio`, `internal` |
+| `triggerSource` | Trigger Source | `iep` | `iep`, `gpio` |
 | `pin` | Target Pin (R31) | `5` | `0`, `1`, `2`, `3`, `4`, `5`, `6`, `7`, `8`, `9`, `10`, `11`, `12`, `13`, `14`, `15`, `16`, `17`, `18`, `19` |
 | `dataRegister` | Output Register (32-bit) | `R4` | — |
 | `clkHz` | PRU/IEP Clock (Hz) | `200000000` | — |

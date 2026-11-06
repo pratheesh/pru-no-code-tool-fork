@@ -14,7 +14,7 @@ Emits parameterized speed, position and direction decoder loop in PRU assembly.
 |---|---|---|---|
 | `aBit` | A Input R31 Pin | `3` | `0`, `1`, `2`, `3`, `4`, `5`, `6`, `7`, `8`, `9`, `10`, `11`, `12`, `13`, `14`, `15`, `16`, `17`, `18`, `19` |
 | `bBit` | B Input R31 Pin | `4` | `0`, `1`, `2`, `3`, `4`, `5`, `6`, `7`, `8`, `9`, `10`, `11`, `12`, `13`, `14`, `15`, `16`, `17`, `18`, `19` |
-| `velocityMethod` | Velocity Method | `iep` | `iep`, `pulse-count` |
+| `velocityMethod` | Velocity Method | `iep` | `iep` |
 | `posRegister` | Position Register (32-bit) | `R4` | — |
 | `velRegister` | Velocity Register (32-bit) | `R5` | — |
 | `dirRegister` | Direction Register (32-bit) | `R8` | — |

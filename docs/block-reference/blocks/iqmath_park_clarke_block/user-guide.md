@@ -13,7 +13,7 @@ Translates 3-phase current (Ia, Ib, Ic) to 2-axis orthogonal vectors (Alpha, Bet
 | Parameter | Display name | Default | Options |
 |---|---|---|---|
 | `transformType` | Transform Type | `Forward` | `Forward`, `Inverse` |
-| `noOfCycles` | Number Of Cycles | `97` | — |
+| `noOfCycles` | Number Of Cycles | `98` | — |
 
 ## Ports
 

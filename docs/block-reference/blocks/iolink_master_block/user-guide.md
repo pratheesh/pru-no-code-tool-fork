@@ -11,9 +11,9 @@ transaction cycle on the C/Q half-duplex line.
 
 **Protocol flow per transaction:**
   1. Wake-up pulse: C/Q driven low for >=80 us, then released high.
-  2. M-sequence TX: Master transmits N bytes of 8N1 UART via ENDAT hardware.
+  2. M-sequence TX: Master transmits N bytes (1..8), one 11-bit 8E1 character each, via ENDAT hardware.
   3. Turnaround: C/Q released; master listens for >=4 bit periods.
-  4. Response RX: Device replies with M bytes of 8N1 UART via ENDAT hardware.
+  4. Response RX: Device replies with M bytes (0..4), one 11-bit 8E1 character each, via ENDAT hardware.
   5. Idle: C/Q high.
 
 **Peripheral resources:**
@@ -23,9 +23,9 @@ transaction cycle on the C/Q half-duplex line.
 - No IEP, MAC, or SPAD required.
 
 **Supported COM rates:**
-  COM1 = 4.8 kbps  (divider 39999, frame 10 bits)
-  COM2 = 38.4 kbps (divider  4999, frame 10 bits)
-  COM3 = 230.4 kbps(divider   832, frame 10 bits)
+  COM1 = 4.8 kbps  (divider 39999, frame 11 bits)
+  COM2 = 38.4 kbps (divider  4999, frame 11 bits)
+  COM3 = 230.4 kbps(divider   832, frame 11 bits)
 
 **BOM:** Requires an external IO-Link transceiver (e.g. TI OL1013, MAX14819)
 to convert the PRU's 3.3V ENDAT UART to 24V C/Q levels.
@@ -33,8 +33,21 @@ to convert the PRU's 3.3V ENDAT UART to 24V C/Q levels.
 **Status:** metadata only. The ENDAT programming follows the UART blocks
 (`uart_config`, `uart_tx_op`, `uart_rx_op`), but the in-tool simulator does
 NOT model the internal ENDAT FIFO/TX/RX state machine, so the transaction
-is not simulated; only the R30 wake-up/DIR waveform is checked.
-The M-sequence transmit sends byte 0 only; multi-byte M-sequences are not implemented.
+is not simulated in the tool; only the R30 wake-up/DIR waveform is checked.
+The TI pru-simulator's peripheral-interface model runs the transmit and receive paths.
+The transmit path sends up to 8 bytes (two 32-bit inputs), one character per byte, each character
+started by its own TX GO.
+
+**Outputs:** output1 = response bytes, first received byte most significant (up to 4 bytes).
+output2 = receive status: bit 0 = parity error, bit 1 = framing error (start or stop bit), 0 = all
+characters were received correctly. The receiver is re-armed for every character and samples each
+bit at 8x oversampling.
+
+**Limits:** the character-to-character timing of a device response (characters following each
+other with 0..3 bit times of gap) and the ENDAT receiver's start-bit detection are checked only
+against the pru-simulator model, not on silicon. The DIR and Wake pins are R30 bits; while the
+ENDAT peripheral interface is selected, R30 byte 0 is the TX FIFO data byte, so pins in bits 0..7
+are also written as FIFO data. The pin mapping of the peripheral mode has to be confirmed on a board.
 
 ## Parameters
 
@@ -45,7 +58,7 @@ The M-sequence transmit sends byte 0 only; multi-byte M-sequences are not implem
 | `baudHz` | Baud Rate (Hz) | `230400` | — |
 | `txBytes` | M-Sequence TX Bytes | `4` | — |
 | `rxBytes` | Response RX Bytes | `4` | — |
-| `frameSizeBits` | Frame Size (bits) | `10` | — |
+| `frameSizeBits` | Frame Size (bits) | `11` | — |
 | `bitPeriodNs` | Bit Period (ns) | `4340` | — |
 | `dirPin` | DIR Pin (R30 Bit) | `2` | — |
 | `wakePin` | Wake Pin (R30 Bit) | `3` | — |
@@ -64,12 +77,13 @@ The M-sequence transmit sends byte 0 only; multi-byte M-sequences are not implem
 | `input1` | `input32` |
 | `input2` | `input32` |
 | `output1` | `output32` |
+| `output2` | `output32` |
 
 ## How to use
 
 1. In SysConfig (PRU No-Code), add a **IO-Link Master** block to your PRU core's flow.
 2. Set the parameters above; wire `prev`/`next` to sequence it, and any `input`/`output` data ports to neighbouring blocks.
-3. Generate — the block emits its `m_iolink_master` invocation into the PRU assembly.
+3. Generate — the block emits its `m_iolink_master_pru0` invocation into the PRU assembly.
 
 ## Notes
 

@@ -4,7 +4,7 @@
 
 ## Purpose
 
-Generic synchronous SSI initiator with configurable frame width (8-32), single-turn/multi-turn extraction, clock polarity/rate, optional parity and error bits, and gray/binary decode. A stuck-data timeout is not implemented: the block waits for the data line as the frame demands.
+Generic synchronous SSI initiator with configurable frame width (8-32), single-turn/multi-turn extraction, clock polarity/rate, optional parity and error bits, and gray/binary decode. output1 is the frame (position payload above the error/parity bits); output2 is the check status: 0 = ok, 1 = parity error, 4 = error bit active, 5 = both (always 0 when neither check is enabled). A stuck-data timeout is not implemented: the block waits for the data line as the frame demands.
 
 Peripheral resources: bit-bangs one R30 clock output and one R31 data input; no PRU peripherals (IEP/MAC/SPAD) required. Pinmux: clock and data must be on distinct PRU R30/R31 bits routed through PRU-ICSSG pinmux (AM64x/AM243x/AM261x). Isolation: single PRU slice owns both pins during transfer; concurrent workloads must not drive the same R30 bit and must avoid R31 contention. Deterministic timing: each clock half-period uses halfPeriodCycles delay-loop iterations, each costing two PRU cycles; monoTimeCycles likewise counts two-cycle idle iterations. The per-bit clock path costs about 4*halfPeriodCycles plus instruction overhead. TIMEOUT_CYCLES is reserved and does not run a delay loop. BOM: RS-422/RS-485 transceiver required for differential SSI (e.g. AM26C31/32); no BOM change for single-ended test. Simulator validates logical shift, gray decode, parity and extraction; physical propagation delay, transceiver skew and monoflop timing require silicon validation.
 
@@ -37,7 +37,7 @@ flowchart LR
 - **Category:** Application-Specific
 - **Execution model (inferred):** `oneshot`
 - **Macro / opcode:** `m_ssi_read`
-- **Data ports:** 0 in / 1 out · **Cycles:** `1345`
+- **Data ports:** 0 in / 2 out · **Cycles:** `1345`
 
 ## Parameter schema
 
@@ -64,13 +64,14 @@ flowchart LR
 | `prev` | `IO_PREV` |
 | `next` | `IO_NEXT` |
 | `output1` | `output32` |
+| `output2` | `output32` |
 
 ## Validation rules
 
 - totalWidth must be 8..32
 - singleTurnBits must be 1..32
 - multiTurnBits must be 0..32
-- singleTurnBits + multiTurnBits must be <= totalWidth
+- singleTurnBits + multiTurnBits must be <= totalWidth minus the enabled parity and error bits (
 - clkPin and dataPin must differ
 - clkPin must be 0..15
 - dataPin must be 0..15
@@ -79,10 +80,11 @@ flowchart LR
 ## Generated macro (`.xdt` equivalent)
 
 ```asm
-m_ssi_read .macro RES, TOTAL_WIDTH, ST_BITS, MT_BITS, CLK_PIN, DATA_PIN, CPOL, HALF_PERIOD, MONO_CYCLES, PARITY_EN, PARITY_TYPE, ERR_EN, GRAY_EN, TIMEOUT_CYCLES
+m_ssi_read .macro RES, STATUS, TOTAL_WIDTH, ST_BITS, MT_BITS, CLK_PIN, DATA_PIN, CPOL, HALF_PERIOD, MONO_CYCLES, PARITY_EN, PARITY_TYPE, ERR_EN, GRAY_EN, TIMEOUT_CYCLES
     ; --- SSI Initiator (generic synchronous) ---
     ; RES = shifted frame (TOTAL_WIDTH bits, MSB first); with GRAY_EN the position payload is converted to binary
-    ; Caller extracts ST/MT via shifts/masks; parity/error checked -> STATUS in TEMP_REG2.b0 (0=ok,1=parity err,4=error bit; TIMEOUT_CYCLES is reserved, no timeout status)
+    ; STATUS = parity/error check result, an allocated output (0=ok, 1=parity err, 4=error bit; both = 5; TIMEOUT_CYCLES is reserved, no timeout status)
+    ; Caller extracts ST/MT from RES via shifts/masks
     ; Frame (SSI datasheet convention, CPOL=1): CLK idles high. The first falling
     ; edge latches the position; each rising edge shifts out the next bit, MSB first;
     ; DATA is sampled in the high phase, before the next falling edge. A frame is
@@ -92,7 +94,7 @@ m_ssi_read .macro RES, TOTAL_WIDTH, ST_BITS, MT_BITS, CLK_PIN, DATA_PIN, CPOL, H
     ; Error bit: if enabled, bit before parity (or last) is active-low error flag
     ldi   RES, 0
     ldi   TEMP_REG1, 0               ; bit counter copy
-    ldi   TEMP_REG2, 0               ; status = 0
+    ldi   STATUS, 0                  ; status = 0
     ; init clock to idle
     .if CPOL == 1
     set   R30, R30, CLK_PIN
@@ -179,7 +181,7 @@ m_ssi_mono?:
     xor   TEMP_REG1, TEMP_REG1, 1        ; invert for odd
     .endif
     qbeq  m_ssi_parity_ok?, TEMP_REG1, TEMP_REG3
-    or    TEMP_REG2.b0, TEMP_REG2.b0, 1  ; parity error
+    or    STATUS, STATUS, 1              ; parity error
 m_ssi_parity_ok?:
     .endif
     ; --- error bit check (if enabled) ---
@@ -193,7 +195,7 @@ m_ssi_parity_ok?:
     .endif
     ; The error bit is active low: 1 = ok, 0 = encoder error -> status bit 2 (value 4).
     qbne  m_ssi_err_ok?, TEMP_REG1, 0
-    or    TEMP_REG2.b0, TEMP_REG2.b0, 4
+    or    STATUS, STATUS, 4
 m_ssi_err_ok?:
     .endif
     ; --- Gray -> binary on the position payload (after parity: parity covers the raw bits) ---
@@ -214,7 +216,7 @@ m_ssi_err_ok?:
     and   RES, RES, ((1 << (PARITY_EN + ERR_EN)) - 1)
     or    RES, RES, TEMP_REG1
     .endif
-    ; Caller can test TEMP_REG2.b0 for nonzero to detect fault
+    ; Downstream blocks test STATUS (output2) for nonzero to detect a bad reading
     .endm
 ```
 

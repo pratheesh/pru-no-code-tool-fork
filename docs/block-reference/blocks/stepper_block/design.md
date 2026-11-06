@@ -56,7 +56,7 @@ flowchart LR
 - stepPin and dirPin must differ
 - maxSpeedSps must be > 0
 - maxSpeedSps requires a period of at least <value> PRU cycles (maxSpeedSps <= clkHz / <value>)
-- numSteps must be > 0
+- numSteps must be a whole number from 1 to 65535 (the step counter is a 16-bit register)
 - clkHz must be > 0
 
 ## Generated macro (`.xdt` equivalent)
