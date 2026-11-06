@@ -37,7 +37,7 @@ MOV  R_out, dataRegHi   ; copy upper register
 flowchart LR
   classDef config fill:#f9f6e5,stroke:#b1a457,stroke-width:1px,color:#333;
   classDef core fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:#000;
-  CORE(("Data Splitter\n[(unclassified)]")):::core
+  CORE(("Data Splitter\n[oneshot]")):::core
   CFG0["Split Select"]:::config -.-> CORE
   CFG1["Number Of Cycles"]:::config -.-> CORE
 ```
@@ -47,7 +47,7 @@ flowchart LR
 
 - **Block id:** `data_splitter`
 - **Category:** Utilities
-- **Execution model (inferred):** `(unclassified)`
+- **Execution model (inferred):** `oneshot`
 - **Macro / opcode:** `m_data_splitter_lower`
 - **Data ports:** 1 in / 1 out · **Cycles:** `1`
 

@@ -197,6 +197,8 @@ Input Values: [1, 1, 0, 0, 0, 0, 1, 1]
 
 | Port | Type |
 |---|---|
+| `input1` | `input32` |
+| `output1` | `output32` |
 | `prev` | `PREV` |
 | `next` | `NEXT` |
 

@@ -128,6 +128,7 @@ R31 Bit 10 - Timestamp Mode:
 
 | Port | Type |
 |---|---|
+| `output1` | `output32` |
 | `prev` | `IO_PREV` |
 | `next` | `IO_NEXT` |
 

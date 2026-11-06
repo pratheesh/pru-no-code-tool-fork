@@ -73,7 +73,7 @@ Performs mathematical operations on two input values and outputs the result. Sup
 flowchart LR
   classDef config fill:#f9f6e5,stroke:#b1a457,stroke-width:1px,color:#333;
   classDef core fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:#000;
-  CORE(("Arithmetic\n[(unclassified)]")):::core
+  CORE(("Arithmetic\n[oneshot]")):::core
   CFG0["Math Operation"]:::config -.-> CORE
   CFG1["Output1 Size"]:::config -.-> CORE
   CFG2["Number Of Cycles"]:::config -.-> CORE
@@ -84,9 +84,9 @@ flowchart LR
 
 - **Block id:** `arithmetic_block`
 - **Category:** Data Handling
-- **Execution model (inferred):** `(unclassified)`
+- **Execution model (inferred):** `oneshot`
 - **Macro / opcode:** `ADC`
-- **Data ports:** 0 in / 0 out · **Cycles:** `1`
+- **Data ports:** 2 in / 1 out · **Cycles:** `1`
 
 ## Parameter schema
 
@@ -100,6 +100,9 @@ flowchart LR
 
 | Port | Type |
 |---|---|
+| `input1` | `input32` |
+| `input2` | `input32` |
+| `output1` | `output32` |
 | `prev` | `PREV` |
 | `next` | `NEXT` |
 

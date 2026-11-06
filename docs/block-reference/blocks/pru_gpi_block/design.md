@@ -133,7 +133,7 @@ flowchart LR
 - **Category:** I/O & Protocol
 - **Execution model (inferred):** `oneshot`
 - **Macro / opcode:** `AND`
-- **Data ports:** 0 in / 0 out · **Cycles:** `3`
+- **Data ports:** 0 in / 1 out · **Cycles:** `3`
 
 ## Parameter schema
 
@@ -146,6 +146,7 @@ flowchart LR
 
 | Port | Type |
 |---|---|
+| `output1` | `output32` |
 | `prev` | `IO_PREV` |
 | `next` | `IO_NEXT` |
 

@@ -176,7 +176,7 @@ Input Values: [1, 1, 0, 0, 0, 0, 1, 1]
 flowchart LR
   classDef config fill:#f9f6e5,stroke:#b1a457,stroke-width:1px,color:#333;
   classDef core fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:#000;
-  CORE(("PRU SPI Transfer\n[(unclassified)]")):::core
+  CORE(("PRU SPI Transfer\n[oneshot]")):::core
   CFG0["Device Mode"]:::config -.-> CORE
   CFG1["SPI Mode"]:::config -.-> CORE
   CFG2["Packet Size"]:::config -.-> CORE
@@ -200,9 +200,9 @@ flowchart LR
 
 - **Block id:** `pru_spi_transfer`
 - **Category:** I/O & Protocol
-- **Execution model (inferred):** `(unclassified)`
+- **Execution model (inferred):** `oneshot`
 - **Macro / opcode:** `m_transfer_packet_spi_mode3_msb_gpo_sclk`
-- **Data ports:** 0 in / 0 out · **Cycles:** `1`
+- **Data ports:** 1 in / 1 out · **Cycles:** `1`
 
 ## Parameter schema
 
@@ -229,6 +229,8 @@ flowchart LR
 
 | Port | Type |
 |---|---|
+| `input1` | `input32` |
+| `output1` | `output32` |
 | `prev` | `PREV` |
 | `next` | `NEXT` |
 

@@ -119,7 +119,7 @@ Calculates CRC checksums for error detection in data transmission and storage. C
 flowchart LR
   classDef config fill:#f9f6e5,stroke:#b1a457,stroke-width:1px,color:#333;
   classDef core fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:#000;
-  CORE(("CRC\n[(unclassified)]")):::core
+  CORE(("CRC\n[oneshot]")):::core
   CFG0["CRC"]:::config -.-> CORE
   CFG1["CRC Polynomial"]:::config -.-> CORE
   CFG2["Lookup Table Memory Location"]:::config -.-> CORE
@@ -132,9 +132,9 @@ flowchart LR
 
 - **Block id:** `crc_block`
 - **Category:** Application-Specific
-- **Execution model (inferred):** `(unclassified)`
+- **Execution model (inferred):** `oneshot`
 - **Macro / opcode:** _(none)_
-- **Data ports:** 2 in / 0 out · **Cycles:** `1`
+- **Data ports:** 2 in / 1 out · **Cycles:** `1`
 
 ## Parameter schema
 
@@ -154,6 +154,7 @@ flowchart LR
 | `input2` | `input32` |
 | `prev` | `PREV` |
 | `next` | `NEXT` |
+| `output1` | `output32` |
 
 ## Validation rules
 

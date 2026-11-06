@@ -68,7 +68,7 @@ allocator needs to know at design time.
 flowchart LR
   classDef config fill:#f9f6e5,stroke:#b1a457,stroke-width:1px,color:#333;
   classDef core fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:#000;
-  CORE(("PRU UART RX Op\n[(unclassified)]")):::core
+  CORE(("PRU UART RX Op\n[oneshot]")):::core
   CFG0["RX Frame Size (bits)"]:::config -.-> CORE
   CFG1["Config Block RX Settings"]:::config -.-> CORE
   CFG2["Number Of Cycles"]:::config -.-> CORE
@@ -79,7 +79,7 @@ flowchart LR
 
 - **Block id:** `uart_rx_op`
 - **Category:** I/O & Protocol
-- **Execution model (inferred):** `(unclassified)`
+- **Execution model (inferred):** `oneshot`
 - **Macro / opcode:** `m_uart_rx_op`
 - **Data ports:** 0 in / 1 out · **Cycles:** `60`
 

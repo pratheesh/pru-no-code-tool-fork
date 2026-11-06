@@ -191,6 +191,7 @@ Input Values: [0, 1]  (Assert at cycle 50, deassert at cycle 250)
 
 | Port | Type |
 |---|---|
+| `input1` | `input32` |
 | `prev` | `PREV` |
 | `next` | `NEXT` |
 

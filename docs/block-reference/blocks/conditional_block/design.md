@@ -102,7 +102,7 @@ flowchart LR
 - **Category:** Program Control
 - **Execution model (inferred):** `(unclassified)`
 - **Macro / opcode:** `LDI`
-- **Data ports:** 0 in / 0 out · **Cycles:** `1`
+- **Data ports:** 2 in / 0 out · **Cycles:** `1`
 
 ## Parameter schema
 
@@ -115,6 +115,8 @@ flowchart LR
 
 | Port | Type |
 |---|---|
+| `input1` | `input32` |
+| `input2` | `input32` |
 | `T` | `CONDITIONAL_NEXT` |
 | `F` | `CONDITIONAL_NEXT` |
 | `prev` | `CONDITIONAL_PREV` |

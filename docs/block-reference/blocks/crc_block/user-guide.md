@@ -133,6 +133,7 @@ Calculates CRC checksums for error detection in data transmission and storage. C
 | `input2` | `input32` |
 | `prev` | `PREV` |
 | `next` | `NEXT` |
+| `output1` | `output32` |
 
 ## How to use
 

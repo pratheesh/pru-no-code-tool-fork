@@ -29,12 +29,12 @@
 | [1-Wire Master](blocks/onewire_block/design.md) | `onewire_block` | `oneshot` | 0/1 | `1` | — | — | [design](blocks/onewire_block/design.md) · [guide](blocks/onewire_block/user-guide.md) |
 | [Parallel Bus / Strobe](blocks/parallel_bus_block/design.md) | `parallel_bus_block` | `oneshot` | 0/0 | `1` | — | — | [design](blocks/parallel_bus_block/design.md) · [guide](blocks/parallel_bus_block/user-guide.md) |
 | [PDM Microphone](blocks/pdm_block/design.md) | `pdm_block` | `oneshot` | 0/1 | `1` | — | — | [design](blocks/pdm_block/design.md) · [guide](blocks/pdm_block/user-guide.md) |
-| [PRU GPI](blocks/pru_gpi_block/design.md) | `pru_gpi_block` | `oneshot` | 0/0 | `3` | — | — | [design](blocks/pru_gpi_block/design.md) · [guide](blocks/pru_gpi_block/user-guide.md) |
+| [PRU GPI](blocks/pru_gpi_block/design.md) | `pru_gpi_block` | `oneshot` | 0/1 | `3` | — | — | [design](blocks/pru_gpi_block/design.md) · [guide](blocks/pru_gpi_block/user-guide.md) |
 | [PRU GPO](blocks/pru_gpo_block/design.md) | `pru_gpo_block` | `oneshot` | 0/0 | `1` | — | — | [design](blocks/pru_gpo_block/design.md) · [guide](blocks/pru_gpo_block/user-guide.md) |
 | [PRU<->PRU scratchpad (XFR)](blocks/pru_spad_block/design.md) | `pru_spad_block` | `oneshot` | 0/0 | `1` | — | — | [design](blocks/pru_spad_block/design.md) · [guide](blocks/pru_spad_block/user-guide.md) |
-| [PRU SPI Read](blocks/pru_spi_read/design.md) | `pru_spi_read` | `(unclassified)` | 0/0 | `1` | — | — | [design](blocks/pru_spi_read/design.md) · [guide](blocks/pru_spi_read/user-guide.md) |
-| [PRU SPI Transfer](blocks/pru_spi_transfer/design.md) | `pru_spi_transfer` | `(unclassified)` | 0/0 | `1` | — | — | [design](blocks/pru_spi_transfer/design.md) · [guide](blocks/pru_spi_transfer/user-guide.md) |
-| [PRU SPI Write](blocks/pru_spi_write/design.md) | `pru_spi_write` | `(unclassified)` | 0/0 | `1` | — | — | [design](blocks/pru_spi_write/design.md) · [guide](blocks/pru_spi_write/user-guide.md) |
+| [PRU SPI Read](blocks/pru_spi_read/design.md) | `pru_spi_read` | `oneshot` | 0/1 | `1` | — | — | [design](blocks/pru_spi_read/design.md) · [guide](blocks/pru_spi_read/user-guide.md) |
+| [PRU SPI Transfer](blocks/pru_spi_transfer/design.md) | `pru_spi_transfer` | `oneshot` | 1/1 | `1` | — | — | [design](blocks/pru_spi_transfer/design.md) · [guide](blocks/pru_spi_transfer/user-guide.md) |
+| [PRU SPI Write](blocks/pru_spi_write/design.md) | `pru_spi_write` | `oneshot` | 1/0 | `1` | — | — | [design](blocks/pru_spi_write/design.md) · [guide](blocks/pru_spi_write/user-guide.md) |
 | [PWM (IEP-synced)](blocks/pwm_block/design.md) | `pwm_block` | `continuous` | 0/0 | `1` | — | — | [design](blocks/pwm_block/design.md) · [guide](blocks/pwm_block/user-guide.md) |
 | [Quadrature encoder decoder](blocks/quadrature_block/design.md) | `quadrature_block` | `continuous` | 0/0 | `1` | — | — | [design](blocks/quadrature_block/design.md) · [guide](blocks/quadrature_block/user-guide.md) |
 | [QUEUE_EMPTY (ICSSG Queue Status Query)](blocks/queue_empty_block/design.md) | `queue_empty_block` | `oneshot` | 0/1 | `1` | `queue_empty` | — | [design](blocks/queue_empty_block/design.md) · [guide](blocks/queue_empty_block/user-guide.md) |
@@ -46,8 +46,8 @@
 | [SPI ADC Sequencer](blocks/spi_adc_sequencer_block/design.md) | `spi_adc_sequencer_block` | `oneshot` | 0/1 | `1` | — | — | [design](blocks/spi_adc_sequencer_block/design.md) · [guide](blocks/spi_adc_sequencer_block/user-guide.md) |
 | [Stepper Motor](blocks/stepper_block/design.md) | `stepper_block` | `oneshot` | 0/1 | `1` | — | — | [design](blocks/stepper_block/design.md) · [guide](blocks/stepper_block/user-guide.md) |
 | [Three-phase complementary PWM](blocks/three_phase_pwm_block/design.md) | `three_phase_pwm_block` | `oneshot` | 3/1 | `1260` | — | — | [design](blocks/three_phase_pwm_block/design.md) · [guide](blocks/three_phase_pwm_block/user-guide.md) |
-| [PRU UART Config](blocks/uart_config/design.md) | `uart_config` | `(unclassified)` | 0/0 | `20` | — | — | [design](blocks/uart_config/design.md) · [guide](blocks/uart_config/user-guide.md) |
-| [PRU UART RX Op](blocks/uart_rx_op/design.md) | `uart_rx_op` | `(unclassified)` | 0/1 | `60` | — | — | [design](blocks/uart_rx_op/design.md) · [guide](blocks/uart_rx_op/user-guide.md) |
+| [PRU UART Config](blocks/uart_config/design.md) | `uart_config` | `oneshot` | 0/0 | `20` | — | — | [design](blocks/uart_config/design.md) · [guide](blocks/uart_config/user-guide.md) |
+| [PRU UART RX Op](blocks/uart_rx_op/design.md) | `uart_rx_op` | `oneshot` | 0/1 | `60` | — | — | [design](blocks/uart_rx_op/design.md) · [guide](blocks/uart_rx_op/user-guide.md) |
 | [PRU UART TX Op](blocks/uart_tx_op/design.md) | `uart_tx_op` | `continuous` | 1/0 | `9` | — | — | [design](blocks/uart_tx_op/design.md) · [guide](blocks/uart_tx_op/user-guide.md) |
 | [WS2812 LED Strip](blocks/ws2812_block/design.md) | `ws2812_block` | `oneshot` | 0/1 | `1` | — | — | [design](blocks/ws2812_block/design.md) · [guide](blocks/ws2812_block/user-guide.md) |
 | [XFR2PSI / XFRDMA (PRU to PSI-L)](blocks/xfr2psi_block/design.md) | `xfr2psi_block` | `oneshot` | 1/1 | `3` | `xfr2psi` | — | [design](blocks/xfr2psi_block/design.md) · [guide](blocks/xfr2psi_block/user-guide.md) |
@@ -58,36 +58,36 @@
 
 | Block | id | Execution | Ports (in/out) | Cycles | Widgets | TODO/VERIFY | Docs |
 |---|---|---|---|---|---|---|---|
-| [Arithmetic](blocks/arithmetic_block/design.md) | `arithmetic_block` | `(unclassified)` | 0/0 | `1` | — | — | [design](blocks/arithmetic_block/design.md) · [guide](blocks/arithmetic_block/user-guide.md) |
-| [Bitwise](blocks/bitwise_block/design.md) | `bitwise_block` | `(unclassified)` | 0/0 | `1` | — | — | [design](blocks/bitwise_block/design.md) · [guide](blocks/bitwise_block/user-guide.md) |
+| [Arithmetic](blocks/arithmetic_block/design.md) | `arithmetic_block` | `oneshot` | 2/1 | `1` | — | — | [design](blocks/arithmetic_block/design.md) · [guide](blocks/arithmetic_block/user-guide.md) |
+| [Bitwise](blocks/bitwise_block/design.md) | `bitwise_block` | `oneshot` | 2/1 | `1` | — | — | [design](blocks/bitwise_block/design.md) · [guide](blocks/bitwise_block/user-guide.md) |
 | [BS RAM (ICSSG Broadside RAM)](blocks/bs_ram_block/design.md) | `bs_ram_block` | `oneshot` | 1/0 | `1` | `bs_ram` | — | [design](blocks/bs_ram_block/design.md) · [guide](blocks/bs_ram_block/user-guide.md) |
 | [BSWAP (ICSSG Byte Swap)](blocks/bswap_block/design.md) | `bswap_block` | `oneshot` | 1/1 | `2` | `bswap` | — | [design](blocks/bswap_block/design.md) · [guide](blocks/bswap_block/user-guide.md) |
 | [IQMath Park/Clarke Transform](blocks/iqmath_park_clarke_block/design.md) | `iqmath_park_clarke_block` | `oneshot` | 4/2 | `97` | `mac` | — | [design](blocks/iqmath_park_clarke_block/design.md) · [guide](blocks/iqmath_park_clarke_block/user-guide.md) |
 | [IQMath PID Controller](blocks/iqmath_pid_block/design.md) | `iqmath_pid_block` | `oneshot` | 2/1 | `50` | `mac` | — | [design](blocks/iqmath_pid_block/design.md) · [guide](blocks/iqmath_pid_block/user-guide.md) |
-| [Load Constant](blocks/load_constant_block/design.md) | `load_constant_block` | `(unclassified)` | 0/0 | `1` | — | — | [design](blocks/load_constant_block/design.md) · [guide](blocks/load_constant_block/user-guide.md) |
+| [Load Constant](blocks/load_constant_block/design.md) | `load_constant_block` | `oneshot` | 0/1 | `1` | — | — | [design](blocks/load_constant_block/design.md) · [guide](blocks/load_constant_block/user-guide.md) |
 | [MAC Hardware (Multiply-Accumulate)](blocks/mac_hw_block/design.md) | `mac_hw_block` | `oneshot` | 3/1 | `9` | `mac` | — | [design](blocks/mac_hw_block/design.md) · [guide](blocks/mac_hw_block/user-guide.md) |
 | [Stitch FIFO (ICSSG Broadside)](blocks/stitch_fifo_block/design.md) | `stitch_fifo_block` | `oneshot` | 1/1 | `3` | `stitch_fifo` | — | [design](blocks/stitch_fifo_block/design.md) · [guide](blocks/stitch_fifo_block/user-guide.md) |
 | [SUM32 (ICSSG UDP Checksum Accelerator)](blocks/sum32_block/design.md) | `sum32_block` | `oneshot` | 1/0 | `12` | `sum32` | — | [design](blocks/sum32_block/design.md) · [guide](blocks/sum32_block/user-guide.md) |
 | [SVPWM Duty Calculator](blocks/svpwm_block/design.md) | `svpwm_block` | `oneshot` | 2/5 | `180` | `mac` | — | [design](blocks/svpwm_block/design.md) · [guide](blocks/svpwm_block/user-guide.md) |
-| [Trigger Event Router](blocks/trigger_router_block/design.md) | `trigger_router_block` | `(unclassified)` | 0/0 | `100` | — | — | [design](blocks/trigger_router_block/design.md) · [guide](blocks/trigger_router_block/user-guide.md) |
+| [Trigger Event Router](blocks/trigger_router_block/design.md) | `trigger_router_block` | `continuous` | 0/0 | `100` | — | — | [design](blocks/trigger_router_block/design.md) · [guide](blocks/trigger_router_block/user-guide.md) |
 
 ### Program Control (6)
 
 | Block | id | Execution | Ports (in/out) | Cycles | Widgets | TODO/VERIFY | Docs |
 |---|---|---|---|---|---|---|---|
-| [If/Else](blocks/conditional_block/design.md) | `conditional_block` | `(unclassified)` | 0/0 | `1` | — | — | [design](blocks/conditional_block/design.md) · [guide](blocks/conditional_block/user-guide.md) |
-| [Event / Interrupt](blocks/event_block/design.md) | `event_block` | `(unclassified)` | 0/0 | `3` | — | — | [design](blocks/event_block/design.md) · [guide](blocks/event_block/user-guide.md) |
-| [Flow Control](blocks/flow_control_block/design.md) | `flow_control_block` | `(unclassified)` | 0/0 | `1` | — | — | [design](blocks/flow_control_block/design.md) · [guide](blocks/flow_control_block/user-guide.md) |
+| [If/Else](blocks/conditional_block/design.md) | `conditional_block` | `(unclassified)` | 2/0 | `1` | — | — | [design](blocks/conditional_block/design.md) · [guide](blocks/conditional_block/user-guide.md) |
+| [Event / Interrupt](blocks/event_block/design.md) | `event_block` | `oneshot` | 0/0 | `3` | — | — | [design](blocks/event_block/design.md) · [guide](blocks/event_block/user-guide.md) |
+| [Flow Control](blocks/flow_control_block/design.md) | `flow_control_block` | `continuous` | 0/0 | `1` | — | — | [design](blocks/flow_control_block/design.md) · [guide](blocks/flow_control_block/user-guide.md) |
 | [Group](blocks/group_block/design.md) | `group_block` | `(unclassified)` | 0/0 | `0` | — | — | [design](blocks/group_block/design.md) · [guide](blocks/group_block/user-guide.md) |
 | [Loop](blocks/loop_block/design.md) | `loop_block` | `continuous` | 0/0 | `2` | — | — | [design](blocks/loop_block/design.md) · [guide](blocks/loop_block/user-guide.md) |
-| [Cooperative Task Scheduler](blocks/scheduler_block/design.md) | `scheduler_block` | `(unclassified)` | 0/0 | `100` | — | — | [design](blocks/scheduler_block/design.md) · [guide](blocks/scheduler_block/user-guide.md) |
+| [Cooperative Task Scheduler](blocks/scheduler_block/design.md) | `scheduler_block` | `continuous` | 0/0 | `100` | — | — | [design](blocks/scheduler_block/design.md) · [guide](blocks/scheduler_block/user-guide.md) |
 
 ### Application-Specific (8)
 
 | Block | id | Execution | Ports (in/out) | Cycles | Widgets | TODO/VERIFY | Docs |
 |---|---|---|---|---|---|---|---|
 | [BiSS-C Initiator](blocks/biss_c_initiator_block/design.md) | `biss_c_initiator_block` | `oneshot` | 0/1 | `500` | — | — | [design](blocks/biss_c_initiator_block/design.md) · [guide](blocks/biss_c_initiator_block/user-guide.md) |
-| [CRC](blocks/crc_block/design.md) | `crc_block` | `(unclassified)` | 2/0 | `1` | — | — | [design](blocks/crc_block/design.md) · [guide](blocks/crc_block/user-guide.md) |
+| [CRC](blocks/crc_block/design.md) | `crc_block` | `oneshot` | 2/1 | `1` | — | — | [design](blocks/crc_block/design.md) · [guide](blocks/crc_block/user-guide.md) |
 | [EnDat 2.2 Initiator](blocks/endat_initiator_block/design.md) | `endat_initiator_block` | `oneshot` | 0/1 | `6538` | — | — | [design](blocks/endat_initiator_block/design.md) · [guide](blocks/endat_initiator_block/user-guide.md) |
 | [Industrial Serial Gateway](blocks/industrial_serial_gateway_block/design.md) | `industrial_serial_gateway_block` | `oneshot` | 2/1 | `5000` | — | — | [design](blocks/industrial_serial_gateway_block/design.md) · [guide](blocks/industrial_serial_gateway_block/user-guide.md) |
 | [IO-Link Master](blocks/iolink_master_block/design.md) | `iolink_master_block` | `oneshot` | 2/1 | `50000` | — | — | [design](blocks/iolink_master_block/design.md) · [guide](blocks/iolink_master_block/user-guide.md) |
@@ -99,16 +99,16 @@
 
 | Block | id | Execution | Ports (in/out) | Cycles | Widgets | TODO/VERIFY | Docs |
 |---|---|---|---|---|---|---|---|
-| [Access Lookup Table](blocks/access_look_up_table/design.md) | `access_look_up_table` | `(unclassified)` | 1/1 | `1` | — | — | [design](blocks/access_look_up_table/design.md) · [guide](blocks/access_look_up_table/user-guide.md) |
-| [Data Splitter](blocks/data_splitter/design.md) | `data_splitter` | `(unclassified)` | 1/1 | `1` | — | — | [design](blocks/data_splitter/design.md) · [guide](blocks/data_splitter/user-guide.md) |
-| [Delay](blocks/delay_block/design.md) | `delay_block` | `(unclassified)` | 0/0 | `1` | — | — | [design](blocks/delay_block/design.md) · [guide](blocks/delay_block/user-guide.md) |
+| [Access Lookup Table](blocks/access_look_up_table/design.md) | `access_look_up_table` | `oneshot` | 1/1 | `1` | — | — | [design](blocks/access_look_up_table/design.md) · [guide](blocks/access_look_up_table/user-guide.md) |
+| [Data Splitter](blocks/data_splitter/design.md) | `data_splitter` | `oneshot` | 1/1 | `1` | — | — | [design](blocks/data_splitter/design.md) · [guide](blocks/data_splitter/user-guide.md) |
+| [Delay](blocks/delay_block/design.md) | `delay_block` | `oneshot` | 0/0 | `1` | — | — | [design](blocks/delay_block/design.md) · [guide](blocks/delay_block/user-guide.md) |
 | [Device Model](blocks/device_model_block/design.md) | `device_model_block` | `continuous` | 0/0 | `0` | — | — | [design](blocks/device_model_block/design.md) · [guide](blocks/device_model_block/user-guide.md) |
-| [IEP Timer](blocks/iep_block/design.md) | `iep_block` | `(unclassified)` | 0/0 | `10` | — | — | [design](blocks/iep_block/design.md) · [guide](blocks/iep_block/user-guide.md) |
+| [IEP Timer](blocks/iep_block/design.md) | `iep_block` | `oneshot` | 0/0 | `10` | — | — | [design](blocks/iep_block/design.md) · [guide](blocks/iep_block/user-guide.md) |
 | [Label](blocks/label/design.md) | `label` | `(unclassified)` | 0/0 | — | — | — | [design](blocks/label/design.md) · [guide](blocks/label/user-guide.md) |
-| [Logic Analyzer](blocks/logic_analyzer_block/design.md) | `logic_analyzer_block` | `(unclassified)` | 0/0 | `1024` | — | — | [design](blocks/logic_analyzer_block/design.md) · [guide](blocks/logic_analyzer_block/user-guide.md) |
-| [Lookup Table](blocks/look_up_table/design.md) | `look_up_table` | `(unclassified)` | 0/0 | `0` | — | — | [design](blocks/look_up_table/design.md) · [guide](blocks/look_up_table/user-guide.md) |
-| [Memory Access](blocks/memory_access_block/design.md) | `memory_access_block` | `(unclassified)` | 0/1 | `3` | — | — | [design](blocks/memory_access_block/design.md) · [guide](blocks/memory_access_block/user-guide.md) |
-| [Memory Variable](blocks/memory_variable_block/design.md) | `memory_variable_block` | `(unclassified)` | 0/0 | `0` | — | — | [design](blocks/memory_variable_block/design.md) · [guide](blocks/memory_variable_block/user-guide.md) |
+| [Logic Analyzer](blocks/logic_analyzer_block/design.md) | `logic_analyzer_block` | `oneshot` | 0/0 | `1024` | — | — | [design](blocks/logic_analyzer_block/design.md) · [guide](blocks/logic_analyzer_block/user-guide.md) |
+| [Lookup Table](blocks/look_up_table/design.md) | `look_up_table` | `oneshot` | 0/0 | `0` | — | — | [design](blocks/look_up_table/design.md) · [guide](blocks/look_up_table/user-guide.md) |
+| [Memory Access](blocks/memory_access_block/design.md) | `memory_access_block` | `oneshot` | 0/1 | `3` | — | — | [design](blocks/memory_access_block/design.md) · [guide](blocks/memory_access_block/user-guide.md) |
+| [Memory Variable](blocks/memory_variable_block/design.md) | `memory_variable_block` | `oneshot` | 0/0 | `0` | — | — | [design](blocks/memory_variable_block/design.md) · [guide](blocks/memory_variable_block/user-guide.md) |
 
 Total outstanding `TODO`/`VERIFY` items across all blocks: **0**.
 

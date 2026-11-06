@@ -12,7 +12,7 @@ _(no description in module)_
 flowchart LR
   classDef config fill:#f9f6e5,stroke:#b1a457,stroke-width:1px,color:#333;
   classDef core fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:#000;
-  CORE(("Cooperative Task Scheduler\n[(unclassified)]")):::core
+  CORE(("Cooperative Task Scheduler\n[continuous]")):::core
   CFG0["Timer Source"]:::config -.-> CORE
   CFG1["Context Switch Overhead (cycles)"]:::config -.-> CORE
   CFG2["Task 1 ID"]:::config -.-> CORE
@@ -26,7 +26,7 @@ flowchart LR
 
 - **Block id:** `scheduler_block`
 - **Category:** Program Control
-- **Execution model (inferred):** `(unclassified)`
+- **Execution model (inferred):** `continuous`
 - **Macro / opcode:** `m_scheduler_block`
 - **Data ports:** 0 in / 0 out · **Cycles:** `100`
 

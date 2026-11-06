@@ -12,7 +12,7 @@ _(no description in module)_
 flowchart LR
   classDef config fill:#f9f6e5,stroke:#b1a457,stroke-width:1px,color:#333;
   classDef core fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:#000;
-  CORE(("Event / Interrupt\n[(unclassified)]")):::core
+  CORE(("Event / Interrupt\n[oneshot]")):::core
   CFG0["Mode"]:::config -.-> CORE
   CFG1["Input Event R31 Bit"]:::config -.-> CORE
   CFG2["Output System Event"]:::config -.-> CORE
@@ -24,7 +24,7 @@ flowchart LR
 
 - **Block id:** `event_block`
 - **Category:** Program Control
-- **Execution model (inferred):** `(unclassified)`
+- **Execution model (inferred):** `oneshot`
 - **Macro / opcode:** `m_event_block`
 - **Data ports:** 0 in / 0 out · **Cycles:** `3`
 

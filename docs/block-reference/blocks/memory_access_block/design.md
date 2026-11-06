@@ -179,7 +179,7 @@ The block raises a validation warning when two Memory Access blocks share one me
 flowchart LR
   classDef config fill:#f9f6e5,stroke:#b1a457,stroke-width:1px,color:#333;
   classDef core fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:#000;
-  CORE(("Memory Access\n[(unclassified)]")):::core
+  CORE(("Memory Access\n[oneshot]")):::core
   CFG0["Operation"]:::config -.-> CORE
   CFG1["Memory Variable Selected"]:::config -.-> CORE
   CFG2["Offset (bytes)"]:::config -.-> CORE
@@ -192,7 +192,7 @@ flowchart LR
 
 - **Block id:** `memory_access_block`
 - **Category:** Utilities
-- **Execution model (inferred):** `(unclassified)`
+- **Execution model (inferred):** `oneshot`
 - **Macro / opcode:** `m_memory_load`
 - **Data ports:** 0 in / 1 out · **Cycles:** `3`
 

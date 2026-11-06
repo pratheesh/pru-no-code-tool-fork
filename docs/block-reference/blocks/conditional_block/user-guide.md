@@ -97,6 +97,8 @@ Implements conditional logic (IF/ELSE statements) to control program flow based 
 
 | Port | Type |
 |---|---|
+| `input1` | `input32` |
+| `input2` | `input32` |
 | `T` | `CONDITIONAL_NEXT` |
 | `F` | `CONDITIONAL_NEXT` |
 | `prev` | `CONDITIONAL_PREV` |

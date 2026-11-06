@@ -116,8 +116,12 @@ function optionsOf(c) {
 function portsOf(mod) {
   try {
     if (typeof mod.ports !== 'function') return null;
-    const stubInst = new Proxy({}, { get: () => makeStub() });
-    const p = mod.ports(stubInst);
+    // Port lists depend on instance values (for example numOfInputPorts), so evaluate against the
+    // default configuration; names without a default stay inert stubs.
+    const defaults = {};
+    for (const c of (mod.config || [])) if (c && typeof c.name === 'string' && 'default' in c) defaults[c.name] = c.default;
+    const inst = new Proxy(defaults, { get: (t, k) => (Object.prototype.hasOwnProperty.call(t, k) ? t[k] : makeStub()) });
+    const p = mod.ports(inst);
     if (!Array.isArray(p)) return null;
     return p.map((x) => ({ name: x.name, type: x.type }));
   } catch { return null; }
@@ -183,8 +187,8 @@ const CLASSIFIER_EXECUTION = { device_model_block: 'continuous' };
 
 function inferExecution(ports, mod, id) {
   if (Object.prototype.hasOwnProperty.call(CLASSIFIER_EXECUTION, id)) return CLASSIFIER_EXECUTION[id];
-  const hasNext = ports && ports.some((p) => p.type === 'IO_NEXT');
-  const hasPrev = ports && ports.some((p) => p.type === 'IO_PREV');
+  const hasNext = ports && ports.some((p) => p.type === 'IO_NEXT' || p.type === 'NEXT');
+  const hasPrev = ports && ports.some((p) => p.type === 'IO_PREV' || p.type === 'PREV');
   const nOut = Number(cfgGet(mod.config, 'numOfOutputPorts'));
   const blob = `${mod.description || ''} ${mod.longDescription || ''}`.toLowerCase();
   if (blob.includes('continuous') || (hasPrev && !hasNext && nOut === 0)) return 'continuous';

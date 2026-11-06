@@ -227,6 +227,7 @@ After running simulation:
 
 | Port | Type |
 |---|---|
+| `output1` | `output32` |
 | `prev` | `PREV` |
 | `next` | `NEXT` |
 

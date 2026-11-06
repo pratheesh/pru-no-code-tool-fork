@@ -72,7 +72,7 @@ HALT                            ; Halt immediately (1 cycle)
 flowchart LR
   classDef config fill:#f9f6e5,stroke:#b1a457,stroke-width:1px,color:#333;
   classDef core fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:#000;
-  CORE(("Flow Control\n[(unclassified)]")):::core
+  CORE(("Flow Control\n[continuous]")):::core
   CFG0["Jump To"]:::config -.-> CORE
   CFG1["Number Of Cycles"]:::config -.-> CORE
 ```
@@ -82,7 +82,7 @@ flowchart LR
 
 - **Block id:** `flow_control_block`
 - **Category:** Program Control
-- **Execution model (inferred):** `(unclassified)`
+- **Execution model (inferred):** `continuous`
 - **Macro / opcode:** `JMP`
 - **Data ports:** 0 in / 0 out · **Cycles:** `1`
 

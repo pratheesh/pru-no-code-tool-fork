@@ -93,6 +93,9 @@ Performs bitwise logical operations and bit shift operations on input values. Es
 
 | Port | Type |
 |---|---|
+| `input1` | `input32` |
+| `input2` | `input32` |
+| `output1` | `output32` |
 | `prev` | `PREV` |
 | `next` | `NEXT` |
 

@@ -62,3 +62,12 @@ def test_generated_pages_have_no_trailing_whitespace(tmp_path):
     bad = ["%s:%d" % (rel, n) for rel, p in _files(out).items()
            for n, line in enumerate(_text(p).split("\n"), 1) if line != line.rstrip(" \t")]
     assert bad == [], bad[:10]
+
+
+def test_blocks_with_dynamic_ports_and_plain_sequence_ports_are_described(tmp_path):
+    """SPI Read builds its data ports from numOfInputPorts/numOfOutputPorts and names its sequence
+    ports NEXT/PREV; the page must list the data port and give the block an execution model."""
+    page = _text(_generate(tmp_path) / "blocks" / "pru_spi_read" / "design.md")
+    assert "| `output1` | `output32` |" in page
+    assert "**Data ports:** 0 in / 1 out" in page
+    assert "(unclassified)" not in page

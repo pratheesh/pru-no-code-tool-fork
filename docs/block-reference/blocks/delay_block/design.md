@@ -74,7 +74,7 @@ Do not wrap a Delay longer than one cycle in a finite Loop: both emit the PRU ha
 flowchart LR
   classDef config fill:#f9f6e5,stroke:#b1a457,stroke-width:1px,color:#333;
   classDef core fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:#000;
-  CORE(("Delay\n[(unclassified)]")):::core
+  CORE(("Delay\n[oneshot]")):::core
   CFG0["PRU Clocks To Wait"]:::config -.-> CORE
   CFG1["Number Of Cycles"]:::config -.-> CORE
 ```
@@ -84,7 +84,7 @@ flowchart LR
 
 - **Block id:** `delay_block`
 - **Category:** Utilities
-- **Execution model (inferred):** `(unclassified)`
+- **Execution model (inferred):** `oneshot`
 - **Macro / opcode:** `m_wait_cycles`
 - **Data ports:** 0 in / 0 out · **Cycles:** `1`
 

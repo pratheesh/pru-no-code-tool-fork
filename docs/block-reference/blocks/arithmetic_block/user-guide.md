@@ -81,6 +81,9 @@ Performs mathematical operations on two input values and outputs the result. Sup
 
 | Port | Type |
 |---|---|
+| `input1` | `input32` |
+| `input2` | `input32` |
+| `output1` | `output32` |
 | `prev` | `PREV` |
 | `next` | `NEXT` |
 

@@ -171,7 +171,7 @@ Input Values: [0, 1]  (Assert at cycle 50, deassert at cycle 250)
 flowchart LR
   classDef config fill:#f9f6e5,stroke:#b1a457,stroke-width:1px,color:#333;
   classDef core fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:#000;
-  CORE(("PRU SPI Write\n[(unclassified)]")):::core
+  CORE(("PRU SPI Write\n[oneshot]")):::core
   CFG0["Device Mode"]:::config -.-> CORE
   CFG1["SPI Mode"]:::config -.-> CORE
   CFG2["Packet Size"]:::config -.-> CORE
@@ -194,9 +194,9 @@ flowchart LR
 
 - **Block id:** `pru_spi_write`
 - **Category:** I/O & Protocol
-- **Execution model (inferred):** `(unclassified)`
+- **Execution model (inferred):** `oneshot`
 - **Macro / opcode:** `m_send_packet_spi_mode1_msb_gpo_sclk`
-- **Data ports:** 0 in / 0 out · **Cycles:** `1`
+- **Data ports:** 1 in / 0 out · **Cycles:** `1`
 
 ## Parameter schema
 
@@ -222,6 +222,7 @@ flowchart LR
 
 | Port | Type |
 |---|---|
+| `input1` | `input32` |
 | `prev` | `PREV` |
 | `next` | `NEXT` |
 

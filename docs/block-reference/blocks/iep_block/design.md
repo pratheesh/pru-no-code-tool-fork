@@ -12,7 +12,7 @@ _(no description in module)_
 flowchart LR
   classDef config fill:#f9f6e5,stroke:#b1a457,stroke-width:1px,color:#333;
   classDef core fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:#000;
-  CORE(("IEP Timer\n[(unclassified)]")):::core
+  CORE(("IEP Timer\n[oneshot]")):::core
   CFG0["Sub-function"]:::config -.-> CORE
   CFG1["IEP Clock (Hz)"]:::config -.-> CORE
   CFG2["Period (ns)"]:::config -.-> CORE
@@ -25,7 +25,7 @@ flowchart LR
 
 - **Block id:** `iep_block`
 - **Category:** Utilities
-- **Execution model (inferred):** `(unclassified)`
+- **Execution model (inferred):** `oneshot`
 - **Macro / opcode:** `m_iep_block`
 - **Data ports:** 0 in / 0 out · **Cycles:** `10`
 

@@ -66,6 +66,7 @@ LDI32 result, value                ; 1 cycle (uses two instruction slots)
 
 | Port | Type |
 |---|---|
+| `output1` | `output32` |
 | `prev` | `PREV` |
 | `next` | `NEXT` |
 

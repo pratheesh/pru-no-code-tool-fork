@@ -39,7 +39,7 @@ Use the **UART TX Op** block for per-transmission operations and the
 flowchart LR
   classDef config fill:#f9f6e5,stroke:#b1a457,stroke-width:1px,color:#333;
   classDef core fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:#000;
-  CORE(("PRU UART Config\n[(unclassified)]")):::core
+  CORE(("PRU UART Config\n[oneshot]")):::core
   CFG0["PRU Selection"]:::config -.-> CORE
   CFG1["Enable TX Config"]:::config -.-> CORE
   CFG2["TX Channel"]:::config -.-> CORE
@@ -66,7 +66,7 @@ flowchart LR
 
 - **Block id:** `uart_config`
 - **Category:** I/O & Protocol
-- **Execution model (inferred):** `(unclassified)`
+- **Execution model (inferred):** `oneshot`
 - **Macro / opcode:** `m_uart_config`
 - **Data ports:** 0 in / 0 out · **Cycles:** `20`
 

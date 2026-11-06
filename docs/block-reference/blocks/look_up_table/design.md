@@ -88,7 +88,7 @@ Browse and select a .json file from your file system with the same format:
 flowchart LR
   classDef config fill:#f9f6e5,stroke:#b1a457,stroke-width:1px,color:#333;
   classDef core fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:#000;
-  CORE(("Lookup Table\n[(unclassified)]")):::core
+  CORE(("Lookup Table\n[oneshot]")):::core
   CFG0["Lookup Table Memory Location"]:::config -.-> CORE
   CFG1["Number of Table Entries"]:::config -.-> CORE
   CFG2["Data Input Method"]:::config -.-> CORE
@@ -104,7 +104,7 @@ flowchart LR
 
 - **Block id:** `look_up_table`
 - **Category:** Utilities
-- **Execution model (inferred):** `(unclassified)`
+- **Execution model (inferred):** `oneshot`
 - **Macro / opcode:** _(none)_
 - **Data ports:** 0 in / 0 out · **Cycles:** `0`
 
