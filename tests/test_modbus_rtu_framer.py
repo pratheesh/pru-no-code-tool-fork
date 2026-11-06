@@ -128,3 +128,38 @@ def test_store_guard_skips_the_store_only_beyond_the_buffer():
     # PRU compares OP against the register: qblt L, reg, 254 branches when 254 < reg.
     macro = emit()["macro"]
     assert re.search(r"qblt\s+mb_no_store\?,\s*\S+\.b1,\s*254", macro)
+
+
+# ---------------------------------------------------------------------------
+# CRC lookup: 2-byte table entries need a byte-scaled offset
+# ---------------------------------------------------------------------------
+
+FRAMES = [
+    [17, 3, 0, 0, 0, 10],
+    [17, 6, 0, 1, 0, 3],
+    [1, 16, 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0],
+    [17, 1, 0xFF, 0xFF],
+]
+
+
+@needs_ti
+@pytest.mark.parametrize("payload", FRAMES)
+def test_valid_frame_is_accepted_with_the_reference_crc(payload):
+    frame = with_crc(payload)
+    status, length, crc = check_frame(frame, slave=payload[0])
+    assert (status, length) == (0, len(frame))
+    assert crc == crc16_modbus(payload)
+
+
+@needs_ti
+def test_corrupted_frame_is_status_1():
+    frame = bytearray(with_crc([17, 3, 0, 0, 0, 10]))
+    frame[3] ^= 0x40
+    status, _n, _crc = check_frame(bytes(frame))
+    assert status == 1
+
+
+@needs_ti
+def test_other_station_is_status_2_and_broadcast_is_accepted():
+    assert check_frame(with_crc([18, 3, 0, 0, 0, 10]), slave=17)[0] == 2
+    assert check_frame(with_crc([0, 6, 0, 1, 0, 3]), slave=17)[0] == 0

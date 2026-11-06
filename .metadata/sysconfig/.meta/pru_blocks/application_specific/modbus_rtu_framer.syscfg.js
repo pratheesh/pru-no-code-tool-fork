@@ -335,7 +335,9 @@ mb_crc_next?:\n\
     lbbo    &TEMP_REG2.b1, TEMP_REG1, " + frameReg + ".b0, 1\n\
     xor     TEMP_REG2.b0, " + frameReg + ".b2, TEMP_REG2.b1\n\
     ldi32   TEMP_REG1, " + lutSymbol + "\n\
-    lbbo    &TEMP_REG2.w0, TEMP_REG1, TEMP_REG2.b0, 2\n\
+    ldi     TEMP_REG2.b1, 0\n\
+    lsl     TEMP_REG2.w0, TEMP_REG2.w0, 1   ; table index x 2 = byte offset of the 2-byte entry\n\
+    lbbo    &TEMP_REG2.w0, TEMP_REG1, TEMP_REG2.w0, 2\n\
     mov     " + frameReg + ".b2, " + frameReg + ".b3   ; crc >>= 8\n\
     ldi     " + frameReg + ".b3, 0\n\
     xor     " + frameReg + ".b2, " + frameReg + ".b2, TEMP_REG2.b0\n\
