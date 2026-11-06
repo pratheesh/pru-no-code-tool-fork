@@ -1634,6 +1634,7 @@ function reportRegisterExhaustion(inst, report) {
             : "Out of registers: block '" + f.block + "' needs " + f.bytes + " byte(s) for " + f.what +
             " but only " + f.freeBytes + " of the " + f.budgetBytes + " allocatable bytes (R0-R" + (f.budgetRegisters - 1) +
             ", " + f.budgetRegisters + " registers; R28/R29 are reserved) are free, so its instruction cannot be generated. " +
+            (f.scratchBytes > 0 ? f.scratchBytes + " byte(s) are held for the macro scratch registers " + f.scratchRegisters.join("/") + " (R26/R27) that blocks in the design use. " : "") +
             (f.pinnedBytes > 0 ? f.pinnedBytes + " byte(s) of the pool are pinned by registers typed into block fields (" +
                 f.pinnedBy.join(", ") + ") and are not available to the allocator. " : "") +
             "Reduce the number of values alive at once, or store intermediate results to memory.";
@@ -1925,7 +1926,9 @@ function getDevicePadSharing(deviceData, coreName) {
 
     // 2. Raw JSON device data structure (ICSSM devices, stubs and test harnesses). ICSSG pads carry a
     // PRGx_PRUy_GPOn + PRGx_PRUy_GPIn pair; ICSSM pads carry one two-way PRx_PRUy_GPIOn signal.
-    const infos = deviceData.pinCommonInfos || {};
+    // No usable pin data from any source: report "unknown" (null), not "no pad is shared" (an empty set).
+    const infos = deviceData.pinCommonInfos;
+    if (!infos || typeof infos !== 'object' || Object.keys(infos).length === 0) return null;
     for (const info of Object.values(infos)) {
         if (!info || !info.pinModeInfo) continue;
         const sigs = new Set(info.pinModeInfo.map(m => m.signalName));
