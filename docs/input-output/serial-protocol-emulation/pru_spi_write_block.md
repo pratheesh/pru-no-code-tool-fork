@@ -32,7 +32,7 @@ Implements SPI (Serial Peripheral Interface) protocol to **transmit** data in bo
 | SCLK Low Width | Clock LOW duration (Controller) | PRU cycles (mode-dependent minimum) |
 | CS Setup Time | Delay after CS assertion (Controller) | 0–10000 ns |
 | CS Hold Time | Delay before CS deassertion (Controller) | 0–10000 ns |
-| Data Setup Time | Extra data hold time after clock edge (Controller) | 0–100 PRU cycles |
+| Data Setup Time | Extra data hold time after clock edge (Controller) | 0–10000 ns |
 | CS Filter Cycles | CS glitch rejection (Peripheral) | 1–0xFFFFFFFF |
 
 ### SPI Modes
@@ -98,7 +98,7 @@ A configured time is therefore a minimum: the real gap is the overhead plus the 
 ### Important Notes
 
 - MODE2 and MODE3 initialize SCLK to HIGH (idle state) before asserting CS
-- CS Setup and Hold Times are in **nanoseconds**, auto-converted to PRU cycles based on PRU clock frequency in Simulation Settings
+- CS Setup, CS Hold and Data Setup Times are in **nanoseconds**, auto-converted to PRU cycles based on PRU clock frequency in Simulation Settings
 - Requires an input connection — connect a Load Constant or other data source to `input1`
 - This is a **terminating block** — no output port
 

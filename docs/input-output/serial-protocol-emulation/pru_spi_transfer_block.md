@@ -33,7 +33,7 @@ Implements full-duplex SPI (Serial Peripheral Interface) in both Controller and 
 | SCLK Low Width | Clock LOW duration (Controller) | PRU cycles (mode-dependent minimum) |
 | CS Setup Time | Delay after CS assertion (Controller) | 0–10000 ns |
 | CS Hold Time | Delay before CS deassertion (Controller) | 0–10000 ns |
-| Data Setup Time | Extra delay after clock edge (Controller) | 0–100 PRU cycles |
+| Data Setup Time | Extra delay after clock edge (Controller) | 0–10000 ns |
 | CS Filter Cycles | CS glitch rejection (Peripheral) | 1–0xFFFFFFFF |
 
 ### SPI Modes
@@ -107,7 +107,7 @@ A configured time is therefore a minimum: the real gap is the overhead plus the 
 ### Important Notes
 
 - MODE2 and MODE3 initialize SCLK to HIGH before asserting CS
-- CS Setup and Hold Times are in **nanoseconds**, auto-converted to PRU cycles based on PRU clock in Simulation Settings
+- CS Setup, CS Hold and Data Setup Times are in **nanoseconds**, auto-converted to PRU cycles based on PRU clock in Simulation Settings
 - Requires an input connection (`input1`) for transmit data
 - Output (`output1`) provides the received data
 

@@ -31,7 +31,7 @@ Implements SPI (Serial Peripheral Interface) protocol to **receive** data in bot
 | SCLK Low Width | Clock LOW duration (Controller) | PRU cycles (mode-dependent minimum) |
 | CS Setup Time | Delay after CS assertion (Controller) | 0–10000 ns |
 | CS Hold Time | Delay before CS deassertion (Controller) | 0–10000 ns |
-| Data Setup Time | Extra delay after clock edge before sampling (Controller) | 0–100 PRU cycles |
+| Data Setup Time | Extra delay after clock edge before sampling (Controller) | 0–10000 ns |
 | CS Filter Cycles | CS glitch rejection (Peripheral) | 1–0xFFFFFFFF |
 
 ### SPI Modes
@@ -78,7 +78,7 @@ All three pins must be unique.
 
 ### Setup and Hold Times
 
-CS Setup Time and CS Hold Time are in **nanoseconds**, automatically converted to PRU cycles based on the PRU Clock Frequency in Simulation Settings. Data Setup Time is in PRU cycles and adds extra delay after the clock edge before sampling — useful for slow peripherals.
+CS Setup Time, CS Hold Time and Data Setup Time are in **nanoseconds**, automatically converted to PRU cycles (rounded up) based on the PRU Clock Frequency in Simulation Settings. Data Setup Time adds extra delay after the clock edge before sampling — useful for slow peripherals.
 
 ### CS Idle Level, Fixed Timing Overhead and Program Memory
 
