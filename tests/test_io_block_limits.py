@@ -2,6 +2,7 @@
 
 - i2c addr7 must be a 7-bit address.
 - stepper numSteps and quadrature sampleCycles are loaded into 16-bit registers.
+- encoder_speed, capture and sdfm expose only options their macros implement.
 
 Validators run through scripts/block_validate_runner.js and scripts/static_global_runner.js,
 which load the shipped sources.
@@ -77,3 +78,19 @@ def test_quadrature_sample_cycles_outside_16_bits_is_refused(cycles):
 @pytest.mark.parametrize("cycles", [1, 10, 65535])
 def test_quadrature_sample_cycles_within_16_bits_is_accepted(cycles):
     assert validate("pru_io_blocks/quadrature_block", dict(QUAD, sampleCycles=cycles)) == []
+
+
+
+
+# ---------------------------------------------------------------- options the macros implement
+
+def test_encoder_speed_offers_only_the_iep_velocity_method():
+    assert config_options("encoder_speed_block", "velocityMethod") == ["iep"]
+
+
+def test_capture_offers_only_trigger_sources_the_macro_implements():
+    assert config_options("capture_block", "triggerSource") == ["iep", "gpio"]
+
+
+def test_sdfm_has_no_oversampling_option_the_macro_ignores():
+    assert config_options("sdfm_block", "osr") is None
