@@ -78,10 +78,10 @@ const endatModule = {
         if (inst.dataRxPin < 0 || inst.dataRxPin > 15) validation.logError("dataRxPin must be 0..15", inst, "dataRxPin");
         if (inst.halfPeriodCycles < 2) validation.logError("halfPeriodCycles too small (min 2)", inst, "halfPeriodCycles");
         if (inst.halfPeriodCycles < 25) validation.logWarning("halfPeriodCycles below 25 exceeds the 2 MHz clock ceiling without propagation-delay compensation (H p.6)", inst, "halfPeriodCycles");
-        if (inst.t1Clocks !== 2) validation.logWarning("EnDat sends the mode command after two clock pulses (2T, H p.8); other t1Clocks values misframe the command", inst, "t1Clocks");
+        if (inst.t1Clocks !== 2) validation.logError("EnDat sends the mode command after two clock pulses (2T, H p.8); t1Clocks must be 2, other values misframe the command", inst, "t1Clocks");
         if (inst.timeoutCycles < 1 || inst.timeoutCycles > 65535) validation.logError("timeoutCycles must be 1..65535", inst, "timeoutCycles");
-        if (inst.trecCycles < 500) validation.logError("trecCycles below 500 violates the 10 us recovery time (need >=1000 at 200 MHz)", inst, "trecCycles");
-        if (inst.trecCycles < 1000) validation.logWarning("trecCycles below 1000 is below the 10 us recovery target (2000 cycles at 200 MHz)", inst, "trecCycles");
+        // The recovery loop is two PRU cycles per iteration: 1000 iterations = 2000 cycles = 10 us at 200 MHz.
+        if (inst.trecCycles < 1000) validation.logError("trecCycles must be at least 1000 (2 cycles per loop = 2000 cycles = the 10 us recovery time at 200 MHz)", inst, "trecCycles");
     },
     getMacro(pruInstructionMacro, opCode) {
         opCode = opCode || pruInstructionMacro.split(",")[0];

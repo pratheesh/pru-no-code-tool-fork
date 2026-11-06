@@ -295,7 +295,10 @@ def test_red_de_held_contends_with_the_encoder():
 
 def test_red_wrong_lead_in_misframes_the_command():
     """t1Clocks=3 instead of the 2T lead-in (H p.8)."""
-    r = run(build(ROOT, "lead3", "inst.t1Clocks = 3;\n"), 1)
+    # validate() rejects t1Clocks != 2; relax that one check to put the bad value on the wire
+    root = _scratch_root("lead3", lambda t: _swap(
+        t, 'validation.logError("EnDat sends the mode command', 'validation.logWarning("EnDat sends the mode command'))
+    r = run(build(root, "lead3", "inst.t1Clocks = 3;\n"), 1)
     with pytest.raises(AssertionError,
                        match=r"firmware status 0x2 \(no start bit\).*mode command redundancy error"):
         assert_decoded(r, 1)
@@ -326,7 +329,10 @@ def test_firmware_holds_the_clock_high_for_the_recovery_time():
 
 
 def test_red_short_trec_returns_inside_the_recovery_time():
-    r = run(build(ROOT, "trec500", "inst.trecCycles = 500;\n"), 1)
+    # validate() rejects trecCycles < 1000; relax that one check to put the short value on the wire
+    root = _scratch_root("trec500", lambda t: _swap(
+        t, 'validation.logError("trecCycles must be', 'validation.logWarning("trecCycles must be'))
+    r = run(build(root, "trec500", "inst.trecCycles = 500;\n"), 1)
     with pytest.raises(AssertionError, match=r"firmware returned \d+ cycles after the CRC, < tm 2000"):
         assert_waits_recovery(r)
 
@@ -419,3 +425,22 @@ def test_red_pin_collisions_are_rejected(name, settings):
 def test_distinct_pins_pass_validation():
     code, out = _validate("distinct", "inst.dataEnPin = 5;\n")
     assert code == 0 and COLLISION not in out, out
+
+
+# --- start-up and recovery timing options are rejected when the framing cannot honour them ------
+
+
+@pytest.mark.parametrize("name,settings,message", [
+    ("t1_3", "inst.t1Clocks = 3;\n", "EnDat sends the mode command after two clock pulses"),
+    ("t1_1", "inst.t1Clocks = 1;\n", "EnDat sends the mode command after two clock pulses"),
+    ("trec_999", "inst.trecCycles = 999;\n", "trecCycles must be at least 1000"),
+    ("trec_500", "inst.trecCycles = 500;\n", "trecCycles must be at least 1000"),
+])
+def test_red_unsupported_t1_and_trec_are_errors(name, settings, message):
+    code, out = _validate(name, settings)
+    assert code != 0 and message in out, out
+
+
+def test_default_t1_and_minimum_trec_pass_validation():
+    code, out = _validate("t1_trec_ok", "inst.trecCycles = 1000;\n")
+    assert code == 0, out

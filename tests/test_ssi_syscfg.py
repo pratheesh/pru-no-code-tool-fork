@@ -338,9 +338,10 @@ ENDAT_MACRO = ["MODE_CMD", "TOTAL_BITS", "ST_BITS", "MT_BITS", "CLK_PIN", "DATA_
                "TIMEOUT_CYCLES", "DATA_EN_PIN"]
 # ModeCommand is a position command (7 or 56) and 56 carries F2, so
 # totalBits = 1 + 2 + ST + MT + 5; DATA_EN_PIN (the transceiver DE) was appended.
+# t1Clocks is the fixed 2T lead-in (validate() rejects other values), still unique among the values.
 ENDAT_FIELDS = [("modeCommand", 56), ("totalBits", 29), ("singleTurnBits", 13),
                 ("multiTurnBits", 8), ("clkPin", 3), ("dataTxPin", 4), ("dataRxPin", 6),
-                ("halfPeriodCycles", 26), ("t1Clocks", 3), ("trtCycles", 21),
+                ("halfPeriodCycles", 26), ("t1Clocks", 2), ("trtCycles", 21),
                 ("trecCycles", 1001), ("timeoutCycles", 102), ("dataEnPin", 9)]
 
 
