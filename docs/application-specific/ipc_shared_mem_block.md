@@ -16,7 +16,7 @@ The IPC Shared Memory block reserves a 4-byte variable in PRU memory and stores 
 
 | Parameter | Description | Default | Options |
 |-----------|-------------|---------|---------|
-| Variable Name | Label of the reserved variable (must not be an assembler reserved name) | `encoder_data` | Text string |
+| Variable Name | Label of the reserved variable (must not be empty or an assembler reserved name; letters, digits and underscores, starting with a letter or underscore) | `encoder_data` | Text string |
 | Memory Section | Where the variable is reserved | `PRU_SHARED_RAM` | `PRU_SHARED_RAM` (`.usmem`), `PRU_DRAM_0` (`.udmem`, the data RAM of the core the design runs on) |
 | Data Type | Type recorded for the variable; the store is always 4 bytes | `uint32_t` | `uint32_t`, `int32_t`, `float` |
 | Also written by another core | Assert when another core or the host also writes this variable | `false` | `true`, `false` |
