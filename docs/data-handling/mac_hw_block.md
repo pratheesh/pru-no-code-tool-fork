@@ -8,7 +8,7 @@ The Hardware MAC block utilizes the PRU's dedicated hardware Multiply-Accumulate
 
 ### Features
 
-- 32-bit signed and unsigned multiplication with 64-bit accumulation
+- 32-bit multiplication in the MAC's multiply-only mode; the lower 32 bits of the product are read back and added to the accumulator input with the PRU ALU (the result is 32 bits wide)
 - Mapped directly to broadside coprocessor registers (`XIN`/`XOUT`)
 - The default generated macro takes 9 cycles (including its emitted HALT), counted in the TI pru-simulator
 
@@ -19,13 +19,12 @@ The Hardware MAC block utilizes the PRU's dedicated hardware Multiply-Accumulate
 | Operand A | The first multiplier input operand (R28 / TEMP_REG1) | Connected input port |
 | Operand B | The second multiplier input operand (R29 / TEMP_REG2) | Connected input port |
 | Accumulator | Optional value to be added to the multiplication product | Connected input port |
-| Mode | Unsigned or Signed multiplication mode | `Signed`, `Unsigned` |
 
 ### How It Works
 
-The block maps the two multiplier inputs to broadside coprocessor registers and triggers the hardware MAC calculation. The result is accumulated into a 64-bit internal register:
+The block selects the MAC's multiply-only mode, maps the two multiplier inputs to the MAC input registers and reads the lower 32 bits of the product with `XIN`. The ALU then adds the accumulator input, so the result is 32 bits wide:
 $$\text{Result} = (\text{Operand A} \times \text{Operand B}) + \text{Accumulator}$$
-The result is then retrieved via `XIN` or standard broadside register read cycles.
+The block has no signed/unsigned mode option and does not keep a 64-bit accumulator.
 
 ### Important Notes
 
