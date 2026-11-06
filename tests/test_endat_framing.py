@@ -365,6 +365,34 @@ def test_dead_line_reports_no_start_bit_within_the_timeout():
     assert r.res == 0
 
 
+
+def reported_cycles(**inst):
+    """noOfCycles the block reports for an instance with the block's defaults plus `inst`."""
+    import json
+    js = ("const {loadBlockModule} = require(process.argv[1] + '/scripts/dual_oracle_harness.js');"
+          "const m = loadBlockModule('endat_initiator_block', 'application_specific');"
+          "const i = Object.assign({totalBits: 30, halfPeriodCycles: 25, t1Clocks: 2, trtCycles: 20,"
+          " trecCycles: 1000, timeoutCycles: 100}, JSON.parse(process.argv[2]));"
+          "process.stdout.write(String(m.config.find(c => c.name === 'noOfCycles').getValue(i)));")
+    out = subprocess.run(["node", "-e", js, str(ROOT), json.dumps(inst)], capture_output=True,
+                         text=True, timeout=60, check=True)
+    return int(out.stdout)
+
+
+def test_reported_cycle_budget_covers_the_start_bit_timeout():
+    """The block clocks up to timeoutCycles pulses hunting for the start bit; a dead line
+    takes all of them, and the reported budget must cover that worst case."""
+    r = _run_dev(build(ROOT, "green"), _FixedLine(0))
+    assert r.halted and r.status == 0b0010
+    budget = reported_cycles()
+    assert r.cycles <= budget, f"dead line took {r.cycles} cycles, reported budget {budget}"
+
+
+def test_reported_cycle_budget_grows_with_the_start_bit_timeout():
+    pulse = 4 + 4 * 25
+    assert reported_cycles(timeoutCycles=200) - reported_cycles(timeoutCycles=100) == 100 * (pulse + 6)
+
+
 def test_stuck_high_line_reads_as_crc_and_f1_not_no_start_bit():
     """A line stuck HIGH (what an absent encoder behind a fail-safe RS-485
     transceiver looks like) is an immediate start bit followed by all ones:

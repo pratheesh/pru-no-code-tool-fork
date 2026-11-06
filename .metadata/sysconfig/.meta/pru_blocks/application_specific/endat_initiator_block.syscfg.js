@@ -48,12 +48,12 @@ const endatModule = {
             const t1 = (inst.t1Clocks || 2) * (pulse + 3);
             const tx = 6 * (pulse + 6);                      // data drive + pulse + shift/counter
             const trt = 3 + 2 * (inst.trtCycles || 20);
-            const hunt = 1 * (pulse + 6);                    // best case: start bit on the first tcal clock
+            const hunt = (inst.timeoutCycles || 100) * (pulse + 6);   // worst case: all timeoutCycles clocks before giving up
             const rx = (tb - 1) * (pulse + 5);               // pulse + lsl/qbbc/or/sub/qbne
             const crc = (tb - 6) * 9 + 30;
             const trec = 1 + 2 * (inst.trecCycles || 1000);
             return idle + t1 + tx + trt + hunt + rx + crc + trec + 50;
-        }, default: 6538 }
+        }, default: 17428 }
     ],
     ports: (inst) => {
         return [
