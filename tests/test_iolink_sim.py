@@ -102,3 +102,45 @@ def test_transmit_uses_the_registers_of_the_core_it_runs_on(core):
     assert r.halted
     assert drive_windows(r.channel(core)), "no frame left the transmit channel of " + core
     assert not drive_windows(r.channel(other)), other + "'s channel was driven by a macro built for " + core
+
+
+def expected_char(byte):
+    """Bits of one IO-Link UART character in transmit order: start, data LSB first, even parity, stop."""
+    data = [(byte >> i) & 1 for i in range(8)]
+    return [0] + data + [sum(data) & 1] + [1]
+
+
+def tx_characters(channel, bits=11):
+    """Decode every transmit window into ``bits`` bits, sampled in the middle of each bit cell."""
+    period = channel.tx_clock_period_ns()
+    chars = []
+    for start, _end in drive_windows(channel):
+        chars.append([channel.tx_line_at(start + (k + 0.5) * period) for k in range(bits)])
+    return chars
+
+
+@pytest.mark.parametrize("core", ["pru0", "pru1"])
+def test_every_payload_byte_is_sent_as_an_11_bit_even_parity_character(core):
+    """Start, 8 data bits LSB first, even parity, stop: one character per byte, none dropped."""
+    payload = [0xA5, 0x01, 0xFF, 0x80, 0x7F, 0x00, 0x3C, 0xC3]
+    lo = int.from_bytes(bytes(payload[:4]), "little")
+    hi = int.from_bytes(bytes(payload[4:]), "little")
+    r = run_macro(core, lo=lo, hi=hi, TX_BYTES="8")
+    assert r.halted
+    got = tx_characters(r.channel())
+    assert got == [expected_char(b) for b in payload], got
+
+
+@pytest.mark.parametrize("count", [1, 2, 5])
+def test_tx_bytes_selects_how_many_characters_are_sent(count):
+    payload = [0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0]
+    r = run_macro("pru0", lo=int.from_bytes(bytes(payload[:4]), "little"),
+                  hi=int.from_bytes(bytes(payload[4:]), "little"), TX_BYTES=str(count))
+    assert tx_characters(r.channel()) == [expected_char(b) for b in payload[:count]]
+
+
+@pytest.mark.parametrize("channel", [1, 2])
+def test_characters_leave_the_selected_endat_channel(channel):
+    r = run_macro("pru0", lo=0x5A, CHANNEL=str(channel))
+    assert tx_characters(r.channel(index=channel)) == [expected_char(0x5A)]
+    assert not drive_windows(r.channel(index=0))
