@@ -268,11 +268,12 @@ mb_wait_reinit?:\n\
     ldi     TEMP_REG1.w2, " + clockDiv + "\n\
     ldi     TEMP_REG2.w0, " + rxcfgReg + "\n\
     sbco    &TEMP_REG1, ICSS_CFG, TEMP_REG2.w0, 4\n\
-    ldi     TEMP_REG1.w0, 0\n\
-    ldi     TEMP_REG1.w2, " + frameBits + "   ; frame size in bits [27:16]\n\
-    set     TEMP_REG1, TEMP_REG1, 31   ; bitSwap = LSB first (standard UART)\n\
-    ldi     TEMP_REG2.w0, " + chCfg0Reg + "\n\
-    sbco    &TEMP_REG1, ICSS_CFG, TEMP_REG2.w0, 4\n\
+    ; RX frame size [27:16] and bitSwap [31] live in bytes 2-3 of CH_CFG0; write only\n\
+    ; those two bytes so the paired transmitter's settings in bytes 0-1 are kept\n\
+    ldi     TEMP_REG1.w0, " + frameBits + "   ; frame size in bits (CFG0 bits [27:16])\n\
+    set     TEMP_REG1.w0, TEMP_REG1.w0, 15   ; CFG0 bit 31: bitSwap = LSB first (standard UART)\n\
+    ldi     TEMP_REG2.w0, " + chCfg0Reg + " + 2\n\
+    sbco    &TEMP_REG1.w0, ICSS_CFG, TEMP_REG2.w0, 2\n\
     ldi     r30.b3, " + r30b3Enable + "   ; enable RX on channel " + channel + "\n\
 \n\
     ; ===== Modbus RTU delimiting: measured 3.5-character-time silence =====\n\

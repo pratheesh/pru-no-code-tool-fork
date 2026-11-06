@@ -163,3 +163,39 @@ def test_corrupted_frame_is_status_1():
 def test_other_station_is_status_2_and_broadcast_is_accepted():
     assert check_frame(with_crc([18, 3, 0, 0, 0, 10]), slave=17)[0] == 2
     assert check_frame(with_crc([0, 6, 0, 1, 0, 3]), slave=17)[0] == 0
+
+
+# ---------------------------------------------------------------------------
+# character layer: channel configuration register
+# ---------------------------------------------------------------------------
+
+CH0_CFG0 = 0x260E8      # PRU0 ENDAT channel 0 CFG0: [31] RX bit swap, [27:16] RX frame size,
+                        # [15:0] TX settings (TX frame size in [15:8])
+TX_SETTINGS = 0x0B05
+
+
+def run_init(op_code=OPCODE, cfg0_reg=CH0_CFG0, tx_settings=TX_SETTINGS):
+    """Run only the character-layer init and return the channel CFG0 register."""
+    parts = emit(op_code)
+    macro = parts["macro"].replace(
+        "    ; ===== Modbus RTU delimiting", "    halt\n    ; ===== Modbus RTU delimiting", 1)
+    assert "    halt\n    ; ===== Modbus RTU delimiting" in macro
+    asm = _program(macro, parts["lut"], [
+        "    ldi     R4, 0", "    %s R4, 17, 1, 1, buf, lut" % op_code])
+    holder = {}
+
+    def on_step(cycle, _gpo, _gpi, sim):
+        holder.setdefault("sim", sim)
+        if cycle == 0:
+            sim.write_perif_register("pru0", cfg0_reg, tx_settings)
+
+    _run(asm, "init", on_step=on_step)
+    regs = holder["sim"].cores["pru0"].io_port.perif.registers
+    return int.from_bytes(regs.read(cfg0_reg, 4), "little")
+
+
+@needs_ti
+def test_receive_setup_keeps_the_transmit_half_of_the_channel_register():
+    cfg0 = run_init()
+    assert cfg0 & 0xFFFF == TX_SETTINGS, hex(cfg0)
+    assert cfg0 >> 31 == 1, "RX bit swap (LSB first) must be set"
