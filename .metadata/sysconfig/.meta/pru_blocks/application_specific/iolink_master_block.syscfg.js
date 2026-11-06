@@ -66,6 +66,25 @@ function getIcssCfgDefinitions() {
     return s;
 }
 
+/**
+ * PRU number of the core this design is generated for (same helper as uart_config).
+ * The ENDAT peripheral registers are per core, so the macro is emitted per core.
+ */
+function getPruNumberFromContext() {
+    const common = system.getScript("/common");
+    const coreName = common.getSelfSysCfgCoreName();
+    if (coreName && coreName.includes("pru")) {
+        const match = coreName.match(/pru(\d+)$/);
+        if (match && match[1]) {
+            const n = parseInt(match[1]);
+            if (!isNaN(n)) {
+                return n;
+            }
+        }
+    }
+    return 0;
+}
+
 function comModeToBaud(comMode) {
     switch (comMode) {
         case "COM1": return 4800;
@@ -236,7 +255,12 @@ var iolinkModule = {
             default: 0,
             hidden: false
         },
-        { name: "opCode", default: "m_iolink_master", hidden: true },
+        {
+            name: "opCode",
+            default: "m_iolink_master_pru0",
+            hidden: true,
+            getValue: function() { return "m_iolink_master_pru" + getPruNumberFromContext(); }
+        },
         { name: "numOfInputPorts",   default: 2, hidden: true },
         { name: "numOfOutputPorts",  default: 1, hidden: true },
         { name: "output1Size",       default: 4, hidden: true },
@@ -310,11 +334,19 @@ var iolinkModule = {
     // Build macro assembly by joining lines.
     // Uses only basic string concatenation to avoid template literal pitfalls.
     getMacro: function(pruInstructionMacro, opCode) {
-        opCode = opCode || "m_iolink_master";
+        // The ENDAT configuration registers differ per core; the core is part of the macro name
+        // ("m_iolink_master_pru0" / "m_iolink_master_pru1"). Without a core suffix PRU0 is used.
+        var callParts = (pruInstructionMacro || "").trim().split(/\s*,\s*|\s+/);
+        var macroName = callParts[0] || opCode || "m_iolink_master_pru0";
+        var pru = macroName.indexOf("_pru1") >= 0 ? "1" : "0";
+        var gpcfgReg = "ICSS_CFG_GPCFG" + pru;
+        var txcfgReg = "ICSS_CFG_PRU" + pru + "_ENDAT_TXCFG";
+        var rxcfgReg = "ICSS_CFG_PRU" + pru + "_ENDAT_RXCFG";
+        var chCfgReg = function(ch) { return "ICSS_CFG_PRU" + pru + "_ENDAT_CH" + ch + "_CFG0"; };
         var lines = [];
 
         // ---- macro header ----
-        lines.push(opCode + " .macro RES, DATA_IN_LO, DATA_IN_HI, DIR_PIN, WAKE_PIN, CHANNEL, CLK_DIV, TX_BYTES, RX_BYTES, TURN_BITS, WAKE_LPS, PREAMBLE");
+        lines.push(macroName + " .macro RES, DATA_IN_LO, DATA_IN_HI, DIR_PIN, WAKE_PIN, CHANNEL, CLK_DIV, TX_BYTES, RX_BYTES, TURN_BITS, WAKE_LPS, PREAMBLE");
         lines.push("    ; ================================================================");
         lines.push("    ; m_iolink_master -- IO-Link master transaction engine");
         lines.push("    ;");
@@ -381,24 +413,24 @@ var iolinkModule = {
         lines.push("    qbbs    m_iolink_wait_reinit_tx?, R31, 21");
         lines.push("    .endif");
         lines.push("    ldi     R30.b3, 0x00");
-        lines.push("    ; Set PRU0 peripheral mode via GPCFG0");
+        lines.push("    ; Set PRU" + pru + " peripheral mode via GPCFG" + pru);
         lines.push("    ldi32   TEMP_REG1, 0x04000000");
-        lines.push("    ldi     TEMP_REG2.w0, ICSS_CFG_GPCFG0");
+        lines.push("    ldi     TEMP_REG2.w0, " + gpcfgReg);
         lines.push("    sbco    &TEMP_REG1, ICSS_CFG, TEMP_REG2.w0, 4");
         lines.push("    ; Configure TX clock: [31:16]=CLK_DIV, [4]=0 (192 MHz UART_CLK)");
         lines.push("    ldi     TEMP_REG1.w0, 0");
         lines.push("    ldi     TEMP_REG1.w2, CLK_DIV");
-        lines.push("    ldi     TEMP_REG2.w0, ICSS_CFG_PRU0_ENDAT_TXCFG");
+        lines.push("    ldi     TEMP_REG2.w0, " + txcfgReg);
         lines.push("    sbco    &TEMP_REG1, ICSS_CFG, TEMP_REG2.w0, 4");
         lines.push("    ; Configure CHCFG0: frameSize=0 (continuous), bitSwap=1 (LSB-first)");
         lines.push("    ldi     TEMP_REG1, 0");
         lines.push("    set     TEMP_REG1, TEMP_REG1, 31");
         lines.push("    .if CHANNEL == 0");
-        lines.push("    ldi     TEMP_REG2.w0, ICSS_CFG_PRU0_ENDAT_CH0_CFG0");
+        lines.push("    ldi     TEMP_REG2.w0, " + chCfgReg(0));
         lines.push("    .elseif CHANNEL == 1");
-        lines.push("    ldi     TEMP_REG2.w0, ICSS_CFG_PRU0_ENDAT_CH1_CFG0");
+        lines.push("    ldi     TEMP_REG2.w0, " + chCfgReg(1));
         lines.push("    .else");
-        lines.push("    ldi     TEMP_REG2.w0, ICSS_CFG_PRU0_ENDAT_CH2_CFG0");
+        lines.push("    ldi     TEMP_REG2.w0, " + chCfgReg(2));
         lines.push("    .endif");
         lines.push("    sbco    &TEMP_REG1, ICSS_CFG, TEMP_REG2.w0, 4");
         lines.push("    ; Select channel with clk_mode=3");
@@ -494,18 +526,18 @@ var iolinkModule = {
         lines.push("    ; Configure RXCFG: oversample=0 (1x), clkDiv=CLK_DIV");
         lines.push("    ldi     TEMP_REG1.w0, 0");
         lines.push("    ldi     TEMP_REG1.w2, CLK_DIV");
-        lines.push("    ldi     TEMP_REG2.w0, ICSS_CFG_PRU0_ENDAT_RXCFG");
+        lines.push("    ldi     TEMP_REG2.w0, " + rxcfgReg);
         lines.push("    sbco    &TEMP_REG1, ICSS_CFG, TEMP_REG2.w0, 4");
         lines.push("    ; Configure CHCFG0: frameSize=10, bitSwap=1 (LSB first)");
         lines.push("    ldi     TEMP_REG1, 0");
         lines.push("    set     TEMP_REG1, TEMP_REG1, 31");
         lines.push("    ldi     TEMP_REG1.w0, (10 << 11)");
         lines.push("    .if CHANNEL == 0");
-        lines.push("    ldi     TEMP_REG2.w0, ICSS_CFG_PRU0_ENDAT_CH0_CFG0");
+        lines.push("    ldi     TEMP_REG2.w0, " + chCfgReg(0));
         lines.push("    .elseif CHANNEL == 1");
-        lines.push("    ldi     TEMP_REG2.w0, ICSS_CFG_PRU0_ENDAT_CH1_CFG0");
+        lines.push("    ldi     TEMP_REG2.w0, " + chCfgReg(1));
         lines.push("    .else");
-        lines.push("    ldi     TEMP_REG2.w0, ICSS_CFG_PRU0_ENDAT_CH2_CFG0");
+        lines.push("    ldi     TEMP_REG2.w0, " + chCfgReg(2));
         lines.push("    .endif");
         lines.push("    sbco    &TEMP_REG1, ICSS_CFG, TEMP_REG2.w0, 4");
         lines.push("    ; Enable RX");
