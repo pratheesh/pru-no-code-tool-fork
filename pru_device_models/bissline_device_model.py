@@ -40,7 +40,10 @@ def crc6_bissc(bits: List[int]) -> int:
 
 
 # ------------------------------------------------------------ 8b/10b LUT
-# Simplified 8b/10b: RD- column, sufficient for model encode/decode.
+# 8b/10b data codes with running disparity. The RD- column below is the code
+# used while the running disparity is negative; an unbalanced code is
+# complemented for the RD+ column (the 5b/6b code for x=7 is the one balanced
+# code that also has a complement).
 _5B6B_RD_NEG = {
     0:0b100111, 1:0b011101, 2:0b101101, 3:0b110001,
     4:0b110101, 5:0b101001, 6:0b011001, 7:0b111000,
@@ -56,23 +59,62 @@ _3B4B_RD_NEG = {
     0:0b1011, 1:0b1001, 2:0b0101, 3:0b1100,
     4:0b1101, 5:0b1010, 6:0b0110, 7:0b1110,
 }
+_3B4B_ALT7_RD_NEG = 0b0111   # D.x.A7: avoids a run of five equal bits
 
-_8B10B_ENC = {}
 _8B10B_DEC = {}
+
+
+def _ones(v: int) -> int:
+    return bin(v).count("1")
+
+
+def _complement(code: int, width: int) -> int:
+    return code ^ ((1 << width) - 1)
+
+
+def _code6(x: int, rd: int) -> int:
+    code = _5B6B_RD_NEG[x]
+    if rd > 0 and (_ones(code) != 3 or x == 7):
+        code = _complement(code, 6)
+    return code
+
+
+def _code4(x: int, y: int, rd: int) -> int:
+    if y == 7 and ((rd < 0 and x in (17, 18, 20)) or (rd > 0 and x in (11, 13, 14))):
+        code = _3B4B_ALT7_RD_NEG
+    else:
+        code = _3B4B_RD_NEG[y]
+    if rd > 0 and (_ones(code) != 2 or y == 3):
+        code = _complement(code, 4)
+    return code
+
+
+def encode_8b10b_with_rd(bv: int, rd: int = -1):
+    """Encode one data byte at running disparity `rd` (-1 or +1).
+
+    Returns (10-bit symbol, running disparity after the symbol).
+    """
+    x = bv & 0x1F
+    y = (bv >> 5) & 0x07
+    c6 = _code6(x, rd)
+    if _ones(c6) != 3:
+        rd = -rd
+    c4 = _code4(x, y, rd)
+    if _ones(c4) != 2:
+        rd = -rd
+    return (c6 << 4) | c4, rd
+
 
 def _init_8b10b():
     for bv in range(256):
-        c6 = _5B6B_RD_NEG[bv & 0x1F]
-        c4 = _3B4B_RD_NEG[(bv >> 5) & 0x07]
-        sym = (c6 << 4) | c4
-        _8B10B_ENC[bv] = sym
-        _8B10B_DEC[sym] = bv
+        for rd in (-1, 1):
+            _8B10B_DEC[encode_8b10b_with_rd(bv, rd)[0]] = bv
 
 _init_8b10b()
 
 
-def encode_8b10b_byte(bv: int) -> int:
-    return _8B10B_ENC[bv & 0xFF]
+def encode_8b10b_byte(bv: int, rd: int = -1) -> int:
+    return encode_8b10b_with_rd(bv, rd)[0]
 
 
 def decode_8b10b_symbol(sym: int) -> Optional[int]:
@@ -130,6 +172,8 @@ class BissLineEncoder(DeviceModel):
       min_bit_period_cycles: minimum cycles per full clock period
       line_coding: enable 8b/10b on the reply
       fec_enable: enable Hamming(7,4) on position nibbles
+      frame_gap_cycles: clock idle time after which the next rising edge starts
+        a new frame; the per-frame clock count and captured bits restart
     """
 
     def __init__(
@@ -145,6 +189,7 @@ class BissLineEncoder(DeviceModel):
         min_bit_period_cycles: int = 4,
         line_coding: bool = True,
         fec_enable: bool = True,
+        frame_gap_cycles: int = 64,
     ):
         self._faults: List[str] = []
         self._events: List[Dict[str, Any]] = []
@@ -153,6 +198,9 @@ class BissLineEncoder(DeviceModel):
             self._faults.append(f"data_bits must be 16, 24, or 32, got {data_bits}")
         if min_bit_period_cycles < 1:
             self._faults.append("min_bit_period_cycles must be >= 1")
+        if frame_gap_cycles < 1:
+            self._faults.append("frame_gap_cycles must be >= 1")
+        self.frame_gap_cycles = frame_gap_cycles
 
         self.ma_pin = ma_pin
         self.mo_pin = mo_pin
@@ -241,11 +289,12 @@ class BissLineEncoder(DeviceModel):
             padded.append(0)
 
         wire: List[int] = []
+        rd = -1   # running disparity starts negative and carries across symbols
         for i in range(0, len(padded), 8):
             bv = 0
             for j in range(8):
                 bv = (bv << 1) | padded[i + j]
-            sym = encode_8b10b_byte(bv)
+            sym, rd = encode_8b10b_with_rd(bv, rd)
             for j in range(9, -1, -1):
                 wire.append((sym >> j) & 1)
         return wire
@@ -261,6 +310,9 @@ class BissLineEncoder(DeviceModel):
 
         if clk != self._last_clk:
             if clk == 1:  # rising edge
+                if (self._clocks_in_burst > 0 and self._last_edge_cycle is not None
+                        and cycle - self._last_edge_cycle > self.frame_gap_cycles):
+                    self._start_new_frame(cycle)
                 if (self._last_rising_edge_cycle is not None
                         and cycle - self._last_rising_edge_cycle < self.min_bit_period_cycles):
                     self._faults.append(
@@ -289,6 +341,16 @@ class BissLineEncoder(DeviceModel):
 
         self._last_clk = clk
         return self._drive()
+
+    def _start_new_frame(self, cycle: int) -> None:
+        """The clock was idle long enough to end the previous frame: report it
+        and clear the per-frame state so the next burst is judged on its own."""
+        self.flush(cycle)
+        self._clocks_in_burst = 0
+        self._shift_index = 0
+        self._overclock_flagged = False
+        self._frame_emitted = False
+        self._captured_bits = []
 
     def _drive(self) -> int:
         if self._shift_index == 0 or self._shift_index > len(self._wire_bits):
