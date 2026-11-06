@@ -313,7 +313,7 @@ mb_next_bit?:\n\
     and     TEMP_REG1, TEMP_REG1, TEMP_REG2\n\
     ; append byte to frame buffer; frames beyond 255 bytes drop the excess\n\
     ; (truncation then fails the CRC check and reports status 1)\n\
-    qbgt    mb_no_store?, " + frameReg + ".b1, 254\n\
+    qblt    mb_no_store?, " + frameReg + ".b1, 254\n\
     ldi32   TEMP_REG2, " + bufSymbol + "\n\
     sbbo    &TEMP_REG1, TEMP_REG2, " + frameReg + ".b1, 1\n\
     add     " + frameReg + ".b1, " + frameReg + ".b1, 1\n\
@@ -321,7 +321,7 @@ mb_no_store?:\n\
     qba     mb_wait_char?               ; restart the silence watchdog\n\
 \n\
 mb_frame_check?:\n\
-    qble    mb_status_short?, " + frameReg + ".b1, 3   ; need addr+fnc+CRC2\n\
+    qbge    mb_status_short?, " + frameReg + ".b1, 3   ; need addr+fnc+CRC2\n\
     ; ---- CRC-16 (Modbus: reflected 0xA001, init 0xFFFF) over length-2 bytes ----\n\
     ; No MULL on PRU: table lookup + shifts + XOR only.\n\
     ; CRC lives in " + frameReg + ".b2 (low) / .b3 (high); .b0 is the buffer pointer.\n\
