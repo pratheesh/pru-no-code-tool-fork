@@ -127,8 +127,8 @@ test('quadrature: forward rotation walks the legal Gray sequence', () => {
         if (seen.length === 0 || seen[seen.length - 1] !== ab) seen.push(ab);
     }
     // ab packs A on bit 0, B on bit 1, so the forward table (A,B) =
-    // (0,0) -> (1,0) -> (1,1) -> (0,1) reads 0 -> 1 -> 3 -> 2.
-    const table = [0b00, 0b01, 0b11, 0b10];
+    // (0,0) -> (0,1) -> (1,1) -> (1,0) reads 0 -> 2 -> 3 -> 1.
+    const table = [0b00, 0b10, 0b11, 0b01];
     for (let i = 1; i < seen.length; i++) {
         const prevIdx = table.indexOf(seen[i - 1]);
         assert.strictEqual(seen[i], table[(prevIdx + 1) % 4],
@@ -148,7 +148,7 @@ test('quadrature: reverse rotation walks the table backwards', () => {
         const ab = r31Trace[c] & 0x3;
         if (seen.length === 0 || seen[seen.length - 1] !== ab) seen.push(ab);
     }
-    const table = [0b00, 0b10, 0b11, 0b01];   // reverse order
+    const table = [0b00, 0b01, 0b11, 0b10];   // reverse order
     for (let i = 1; i < seen.length; i++) {
         const prevIdx = table.indexOf(seen[i - 1]);
         assert.strictEqual(seen[i], table[(prevIdx + 1) % 4],
