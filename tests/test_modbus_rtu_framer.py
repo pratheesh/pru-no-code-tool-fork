@@ -199,3 +199,53 @@ def test_receive_setup_keeps_the_transmit_half_of_the_channel_register():
     cfg0 = run_init()
     assert cfg0 & 0xFFFF == TX_SETTINGS, hex(cfg0)
     assert cfg0 >> 31 == 1, "RX bit swap (LSB first) must be set"
+
+
+# ---------------------------------------------------------------------------
+# character layer: Modbus RTU characters are 11 bits (start + 8 data + parity/stop + stop)
+# ---------------------------------------------------------------------------
+
+CHAR_BITS = 11
+
+
+@needs_ti
+def test_receive_frame_size_is_one_modbus_character():
+    cfg0 = run_init()
+    assert (cfg0 >> 16) & 0xFFF == CHAR_BITS, hex(cfg0)
+
+
+def shifted_in(bits):
+    """Value of the receive shift register after `bits` (first received first) have been
+    shifted in from the top, one per iteration (lsr by 1, then set bit 31)."""
+    value = 0
+    for b in bits:
+        value = (value >> 1) | (b << 31)
+    return value
+
+
+def character_bits(data, parity_or_stop2):
+    """start(0), 8 data bits LSB first, extra bit, stop(1)."""
+    return [0] + [(data >> i) & 1 for i in range(8)] + [parity_or_stop2, 1]
+
+
+@needs_ti
+@pytest.mark.parametrize("data", [0x11, 0xA5, 0xFF, 0x80, 0x01])
+@pytest.mark.parametrize("extra", [0, 1])
+def test_eleven_bit_character_yields_the_data_byte(data, extra):
+    parts = emit()
+    macro = parts["macro"]
+    # Enter the macro just after the per-bit loop, with the shift register a full
+    # character produces, and stop where the byte would be stored.
+    align = re.search(r"    ldi     TEMP_REG2\.w0, \d+\n    lsr     TEMP_REG1, TEMP_REG1, TEMP_REG2\.w0\n", macro)
+    guard = re.search(r"    qblt    mb_no_store\?,", macro)
+    assert align and guard
+    macro = macro.replace(guard.group(0), "    mov     R5, TEMP_REG1\n    halt\n" + guard.group(0), 1)
+    macro = macro.replace(align.group(0), "mb_aligned?:\n" + align.group(0), 1)
+    value = shifted_in(character_bits(data, extra))
+    macro = macro.replace(
+        "    ; ===== character layer init",
+        "    ldi32   TEMP_REG1, %d\n    ldi     TEMP_REG2, 0\n    qba     mb_aligned?\n"
+        "    ; ===== character layer init" % value, 1)
+    asm = _program(macro, parts["lut"], [
+        "    ldi     R4, 0", "    %s R4, 17, 1, 1, buf, lut" % OPCODE])
+    assert _run(asm, "char").registers[5] == data

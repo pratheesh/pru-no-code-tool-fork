@@ -235,9 +235,10 @@ function getMacro(pruInstructionMacro, opCode) {
     else if (macroName.includes("_4x")) middleBit = "2";
     else middleBit = "4";
 
-    // UART character = 10 bits (1 start + 8 data + 1 stop), LSB first.
-    const frameBits = 10;
-    const alignShift = 32 - frameBits; // 22: position of the start bit after reception
+    // Modbus RTU character = 11 bits, LSB first: 1 start + 8 data + parity (8E1/8O1) or a
+    // second stop bit (8N2) + 1 stop. The bits after the 8 data bits are consumed, not decoded.
+    const frameBits = 11;
+    const alignShift = 32 - frameBits; // 21: position of the start bit after reception
 
     let body = "";
 
