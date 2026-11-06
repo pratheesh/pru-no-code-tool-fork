@@ -470,7 +470,7 @@ function outputRegisterNotations(entry) {
 
 /**
  * Register token a consumer reads for input <inputPort> wired to the source port named by `conn`.
- * Returns the source output port's own register; a missing/malformed port name or a port that owns no register is
+ * Returns the source output port's own register (lo and hi registers for a port wider than 4 bytes); a missing/malformed port name or a port that owns no register is
  * recorded in unroutedConnections (so validation names the block and port) and yields a token that cannot assemble,
  * because silently substituting output1's register would assemble into wrong code.
  */
@@ -488,6 +488,8 @@ function sourceRegisterToken(consumer, inputPort, conn) {
         unroutedConnections.push({ consumer: consumer.$name, inputPort: inputPort, source: source.$name, sourcePort: "output" + port });
         return "UNROUTED_" + source.$name + "_output" + port;
     }
+    // a 64-bit port is two consecutive registers (lo, hi), as for output1
+    if (alloc.numBytes > 4) return getPruRegister(alloc.byteOffset, 4) + " , " + getPruRegister(alloc.byteOffset + 4, 4);
     return getPruRegister(alloc.byteOffset, alloc.numBytes);
 }
 
@@ -1402,7 +1404,9 @@ function pushInstruction(instance, parentInstance) {
                     }
                     moduleInstanceRegisterMap[instanceName]["byteOffsetOfOutput" + output] = extraOffset;
                     moduleInstanceRegisterMap[instanceName]["numOfBytesReqByOutput" + output] = width;
-                    macroOutputRegisters.push(getPruRegister(extraOffset, width));
+                    macroOutputRegisters.push(width > 4
+                        ? getPruRegister(extraOffset, 4) + ", " + getPruRegister(extraOffset + 4, 4)
+                        : getPruRegister(extraOffset, width));
                 }
             }
 
