@@ -112,7 +112,6 @@ const topModules_pru = [
                             "/pru_blocks/pru_io_blocks/mdio_master_block",
                             "/pru_blocks/pru_io_blocks/multi_axis_motion_block",
                             "/pru_blocks/pru_io_blocks/safety_dual_monitor_block",
-                            "/pru_blocks/pru_io_blocks/xfr2psi_block",
                         ]
                     }
                 ]
@@ -181,7 +180,6 @@ const topModules_rtu_tx_pru =[
                 modules: [
                     "/pru_blocks/pru_io_blocks/pru_gpi_block",
                     "/pru_blocks/pru_io_blocks/sdfm_block",
-                    "/pru_blocks/pru_io_blocks/xfr2psi_block",
                 ],
             },
             {

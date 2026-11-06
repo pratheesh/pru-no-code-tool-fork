@@ -3,6 +3,7 @@
 - i2c addr7 must be a 7-bit address.
 - stepper numSteps and quadrature sampleCycles are loaded into 16-bit registers.
 - encoder_speed, capture and sdfm expose only options their macros implement.
+- the AM261x palette does not list the ICSSG-only xfr2psi block.
 
 Validators run through scripts/block_validate_runner.js and scripts/static_global_runner.js,
 which load the shipped sources.
@@ -94,3 +95,21 @@ def test_capture_offers_only_trigger_sources_the_macro_implements():
 
 def test_sdfm_has_no_oversampling_option_the_macro_ignores():
     assert config_options("sdfm_block", "osr") is None
+
+
+# ---------------------------------------------------------------- AM261x palette
+
+def palette(soc, core):
+    return {m["module"] for m in node("scripts/dump_soc_palette.js",
+            f".metadata/sysconfig/.meta/soc/pru_blocks_{soc}.syscfg.js", core)}
+
+
+@pytest.mark.parametrize("core", ["pru0", "pru1", "rtu_pru0"])
+def test_am261x_palette_omits_icssg_only_xfr2psi(core):
+    modules = palette("am261x", f"icss_m0_{core}")
+    assert "/pru_blocks/pru_io_blocks/sdfm_block" in modules
+    assert "/pru_blocks/pru_io_blocks/xfr2psi_block" not in modules
+
+
+def test_am64x_palette_keeps_xfr2psi():
+    assert "/pru_blocks/pru_io_blocks/xfr2psi_block" in palette("am64x", "icss_g0_pru0")
