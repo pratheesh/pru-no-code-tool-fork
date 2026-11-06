@@ -31,7 +31,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 sys.path.insert(0, ROOT)
 
 from scripts.sim import device_bindings
-from scripts.sim.elf_cosim import find_pru_simulator, _sim_namespace
+from scripts.sim.elf_cosim import SimulatorNotFound, find_pru_simulator, _sim_namespace
 
 #: Device kinds whose decoded value this runner can compare with the model.
 DECODERS = ("ssi", "bissc")
@@ -358,7 +358,11 @@ def main(argv=None):
         print("REFUSED: manifest has no device bindings. An empty manifest is REFUSED.", file=sys.stderr)
         return EXIT_REFUSED
 
-    sim_dir = find_pru_simulator()
+    try:
+        sim_dir = find_pru_simulator()
+    except SimulatorNotFound as exc:
+        print(f"REFUSED: {exc}", file=sys.stderr)
+        return EXIT_REFUSED
 
     with _sim_namespace(sim_dir):
         from simulator import Simulator
