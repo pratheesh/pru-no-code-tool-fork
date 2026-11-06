@@ -653,8 +653,13 @@ function buildDeviceBindings(inst) {
             params = null;
         }
 
-        const clockPin = inst[`gpi${pinNum}_deviceClockPin`];
-        const indexPin = inst[`gpi${pinNum}_deviceIndexPin`];
+        // The EFFECTIVE companion pins (user field, else the bound block's own pin), the
+        // same ones validation and the in-tool simulator use, so a design the GUI accepts
+        // reaches the Python binding with the clock pin it relies on.
+        const kind = inst[`gpi${pinNum}_deviceKind`];
+        const effective = devicePinDefaults(inst, pinNum, kind);
+        const clockPin = effective.clockPin;
+        const indexPin = effective.indexPin;
 
         bindings.push({
             primaryPin: pinNum,
@@ -686,9 +691,8 @@ function buildDeviceBindings(inst) {
  * conflict check. Returns [{pinNum, kind, pins: [{pin, label}]}].
  * Uses the EFFECTIVE companion pins (devicePinDefaults), the same pins the
  * device would really be wired to, not just the raw fields.
- * BuildDeviceBindings emits the RAW fields (an unset companion pin is null in the
- * manifest); this check claims the effective pin on purpose - the device is wired there either
- * way, so a Device Model on that pin is a real short even though the manifest omits it.
+ * buildDeviceBindings emits the same effective pins, so the manifest and this check agree on
+ * where the device is wired.
  */
 function collectGpiDeviceClaims(inst) {
     const claims = [];
@@ -1651,6 +1655,7 @@ function reportRegisterExhaustion(inst, report) {
             : "Out of registers: block '" + f.block + "' needs " + f.bytes + " byte(s) for " + f.what +
             " but only " + f.freeBytes + " of the " + f.budgetBytes + " allocatable bytes (R0-R" + (f.budgetRegisters - 1) +
             ", " + f.budgetRegisters + " registers; R28/R29 are reserved) are free, so its instruction cannot be generated. " +
+            (f.scratchBytes > 0 ? f.scratchBytes + " byte(s) are held for the macro scratch registers " + f.scratchRegisters.join("/") + " (R26/R27) that blocks in the design use. " : "") +
             (f.pinnedBytes > 0 ? f.pinnedBytes + " byte(s) of the pool are pinned by registers typed into block fields (" +
                 f.pinnedBy.join(", ") + ") and are not available to the allocator. " : "") +
             "Reduce the number of values alive at once, or store intermediate results to memory.";
@@ -2862,7 +2867,9 @@ function getDevicePadSharing(deviceData, coreName) {
 
     // 2. Raw JSON device data structure (ICSSM devices, stubs and test harnesses). ICSSG pads carry a
     // PRGx_PRUy_GPOn + PRGx_PRUy_GPIn pair; ICSSM pads carry one two-way PRx_PRUy_GPIOn signal.
-    const infos = deviceData.pinCommonInfos || {};
+    // No usable pin data from any source: report "unknown" (null), not "no pad is shared" (an empty set).
+    const infos = deviceData.pinCommonInfos;
+    if (!infos || typeof infos !== 'object' || Object.keys(infos).length === 0) return null;
     for (const info of Object.values(infos)) {
         if (!info || !info.pinModeInfo) continue;
         const sigs = new Set(info.pinModeInfo.map(m => m.signalName));

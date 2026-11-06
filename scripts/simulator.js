@@ -319,7 +319,7 @@ function loadElfFirmware(buffer) {
           }
         }
         for (let s = 0; s < numSyms; s++) {
-          const symOff = s * 16;
+          const symOff = sh_offset + s * 16;   // symbols live in the .symtab section
           const st_name = readU32(symOff);
           const st_value = readU32(symOff + 4);
           const st_size = readU32(symOff + 8);
@@ -826,9 +826,15 @@ class Simulator {
       errorParsing: 0,
       r31HistoryMap: this._r31HistoryMap,
       mmioMap: this._mmioMap,
+      // IEP timer, same register map and semantics as the GUI core
+      // (pru_core.js): GLOBAL_CFG 0x00, COUNT_REG0/1 0x10/0x14, CMP_CFG 0x70,
+      // CMP_STATUS 0x74, CMPj_REG0/1 at 0x78 + 8j / 0x7C + 8j.
+      iepGlobalCfg: 0,
       iepCount: 0,
-      iepCmp0: 0,
-      iepCmp1: 0,
+      iepCountHi: 0,
+      iepCmpCfg: 0,
+      iepCmp: new Array(16).fill(0),
+      iepCmpHi: new Array(16).fill(0),
       iepCmpStatus: 0,
       // XFR2TR ring state (SPRUIM2J Table 6-112). queue holds the
       // submitted-but-not-yet-drained TR IDs (capacity 8, the FIFO depth).
@@ -877,8 +883,9 @@ class Simulator {
       cycles: this._pruState.cycles,
       carry: this._pruState.carry,
       iepCount: this._pruState.iepCount,
-      iepCmp0: this._pruState.iepCmp0,
-      iepCmp1: this._pruState.iepCmp1,
+      iepCountHi: this._pruState.iepCountHi,
+      iepCmp0: this._pruState.iepCmp[0],
+      iepCmp1: this._pruState.iepCmp[1],
       iepCmpStatus: this._pruState.iepCmpStatus,
       xfr2tr: this._pruState.xfr2tr ? JSON.parse(JSON.stringify(this._pruState.xfr2tr)) : null,
       bsRam: this._pruState.bsRam ? JSON.parse(JSON.stringify(this._pruState.bsRam)) : null,
@@ -1700,30 +1707,21 @@ class Simulator {
       case 'NOP':
         pruState.pc++;
         break;
-      case 'ZERO': {
-        const op1Info = this._parseRegisterReference(operands[0].replace(/&|,/g, ''));
-        const byteCountStr = operands[1] ? operands[1].replace(/,/g, '') : "4";
-        const byteCount = this._parseImmediate(byteCountStr);
-        if (op1Info) {
-          const startReg = (op1Info.regNum !== undefined) ? op1Info.regNum : op1Info.reg;
-          const numRegs = Math.ceil(byteCount / 4);
-          for (let i = 0; i < numRegs && (startReg + i) < 32; i++) {
-            pruState.registers[startReg + i] = 0;
-          }
-        }
-        pruState.pc++;
-        break;
-      }
+      case 'ZERO':
       case 'FILL': {
-        const op1Info = this._parseRegisterReference(operands[0].replace(/&|,/g, ''));
+        const op1Info = this._parseRegister(operands[0].replace(/&|,/g, ''));
+        if (this._handleParsingError(pruState, op1Info)) { pruState.pc++; break; }
         const byteCountStr = operands[1] ? operands[1].replace(/,/g, '') : "4";
         const byteCount = this._parseImmediate(byteCountStr);
-        if (op1Info) {
-          const startReg = (op1Info.regNum !== undefined) ? op1Info.regNum : op1Info.reg;
-          const numRegs = Math.ceil(byteCount / 4);
-          for (let i = 0; i < numRegs && (startReg + i) < 32; i++) {
-            pruState.registers[startReg + i] = 0xFFFFFFFF;
-          }
+        // The operand names the first byte (Rn, Rn.bK or Rn.wK); the count covers exactly
+        // that many bytes of the register file, little-endian, and no more.
+        const startByte = op1Info.reg * 4 +
+          (op1Info.type === 'byte' ? op1Info.byteNum : op1Info.type === 'word' ? op1Info.wordNum : 0);
+        const fillByte = opcode === 'FILL' ? 0xFF : 0x00;
+        for (let b = startByte; b < startByte + byteCount && b < 32 * 4; b++) {
+          const shift = (b % 4) * 8;
+          const r = b >> 2;
+          pruState.registers[r] = ((pruState.registers[r] & ~(0xFF << shift)) | (fillByte << shift)) >>> 0;
         }
         pruState.pc++;
         break;
@@ -1800,10 +1798,15 @@ class Simulator {
           // through to DMEM0 and returned wrong data.
           const iepOffset = memAddress - 0x0002E000;
           let regVal = 0;
-          if (iepOffset === 0x0C) regVal = pruState.iepCount;
-          else if (iepOffset === 0x44) regVal = pruState.iepCmpStatus;
-          else if (iepOffset === 0x48) regVal = pruState.iepCmp0;
-          else if (iepOffset === 0x4C) regVal = pruState.iepCmp1;
+          if (iepOffset === 0x00) regVal = pruState.iepGlobalCfg;
+          else if (iepOffset === 0x10) regVal = pruState.iepCount;
+          else if (iepOffset === 0x14) regVal = pruState.iepCountHi;
+          else if (iepOffset === 0x70) regVal = pruState.iepCmpCfg;
+          else if (iepOffset === 0x74) regVal = pruState.iepCmpStatus;
+          else if (iepOffset >= 0x78 && iepOffset < 0x78 + 16 * 8) {
+            const j = Math.floor((iepOffset - 0x78) / 8);
+            regVal = (((iepOffset - 0x78) % 8) === 0) ? pruState.iepCmp[j] : pruState.iepCmpHi[j];
+          }
           data = new Uint8Array(byteCount);
           for (let i = 0; i < byteCount; i++) {
             data[i] = (regVal >>> (i * 8)) & 0xFF;
@@ -1814,8 +1817,8 @@ class Simulator {
 
         // Write into destination register(s)
         if (data) {
-          let currentReg = destRegInfo.regNum;
-          let currentByte = destRegInfo.bytePos || destRegInfo.wordPos * 2 || 0;
+          let currentReg = destRegInfo.reg;
+          let currentByte = destRegInfo.byteNum || destRegInfo.wordNum || 0;
           let bytesRemaining = byteCount;
           let bufOffset = 0;
           while (bytesRemaining > 0) {
@@ -1867,8 +1870,8 @@ class Simulator {
 
         const memAddress = baseValue + offsetValue;
         const dataBuffer = new Uint8Array(byteCount);
-        let currentReg = srcRegInfo.regNum;
-        let currentByte = srcRegInfo.bytePos || srcRegInfo.wordPos * 2 || 0;
+        let currentReg = srcRegInfo.reg;
+        let currentByte = srcRegInfo.byteNum || srcRegInfo.wordNum || 0;
         let bytesRemaining = byteCount;
         let bufOffset = 0;
         while (bytesRemaining > 0 && currentReg <= 30) {
@@ -1889,10 +1892,16 @@ class Simulator {
           const iepOffset = memAddress - 0x0002E000;
           let regVal = 0;
           for (let i = 0; i < byteCount; i++) regVal |= dataBuffer[i] << (i * 8);
-          if (iepOffset === 0x0C) pruState.iepCount = regVal;
-          else if (iepOffset === 0x44) pruState.iepCmpStatus &= ~regVal;
-          else if (iepOffset === 0x48) pruState.iepCmp0 = regVal;
-          else if (iepOffset === 0x4C) pruState.iepCmp1 = regVal;
+          if (iepOffset === 0x00) pruState.iepGlobalCfg = regVal;
+          else if (iepOffset === 0x10) pruState.iepCount = regVal >>> 0;
+          else if (iepOffset === 0x14) pruState.iepCountHi = regVal >>> 0;
+          else if (iepOffset === 0x70) pruState.iepCmpCfg = regVal;
+          else if (iepOffset === 0x74) pruState.iepCmpStatus &= ~regVal;   // write 1 to clear
+          else if (iepOffset >= 0x78 && iepOffset < 0x78 + 16 * 8) {
+            const j = Math.floor((iepOffset - 0x78) / 8);
+            if (((iepOffset - 0x78) % 8) === 0) pruState.iepCmp[j] = regVal >>> 0;
+            else pruState.iepCmpHi[j] = regVal >>> 0;
+          }
         } else {
           this._pruDMEM0.writeDMEM0(memAddress, dataBuffer);
         }
@@ -2165,13 +2174,27 @@ class Simulator {
       if (pruState.r31HistoryMap && pruState.r31HistoryMap[pruState.cycles] !== undefined) {
         pruState.registers[31] = pruState.r31HistoryMap[pruState.cycles];
       }
-      pruState.iepCount++;
-      if (pruState.iepCmp0 > 0 && pruState.iepCount >= pruState.iepCmp0) {
-        pruState.iepCmpStatus |= 1;
-        pruState.iepCount = 0;
-      }
-      if (pruState.iepCmp1 > 0 && pruState.iepCount >= pruState.iepCmp1) {
-        pruState.iepCmpStatus |= 2;
+      // Counter runs only with CNT_ENABLE; compares fire on equality of the
+      // 64-bit count and only for CMP_EN bits; CMP0 resets the counter only
+      // with CMP0_RST_CNT_EN (the GUI core's rules, pru_core.js).
+      if (pruState.iepGlobalCfg & 0x1) {
+        const inc = (pruState.iepGlobalCfg >> 4) & 0xF;
+        const sum = pruState.iepCount + inc;
+        pruState.iepCount = sum >>> 0;
+        if (sum > 0xFFFFFFFF) pruState.iepCountHi = (pruState.iepCountHi + 1) >>> 0;
+        let hit0 = false;
+        for (let j = 0; j < 16; j++) {
+          if ((pruState.iepCmpCfg & (1 << (j + 1)))
+              && pruState.iepCount === pruState.iepCmp[j]
+              && pruState.iepCountHi === pruState.iepCmpHi[j]) {
+            pruState.iepCmpStatus |= (1 << j);
+            if (j === 0) hit0 = true;
+          }
+        }
+        if (hit0 && (pruState.iepCmpCfg & 0x1)) {
+          pruState.iepCount = 0;
+          pruState.iepCountHi = 0;
+        }
       }
       r30History.push(pruState.registers[30]);
       r31History.push(pruState.registers[31]);

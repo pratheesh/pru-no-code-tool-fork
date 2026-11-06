@@ -2,7 +2,8 @@
  * PRU Register Allocator
  * 
  * Manages allocation of PRU registers (R0-R29) for blocks.
- * R28 and R29 are reserved as temporary registers per block.
+ * R28 and R29 are reserved as temporary registers per block. R26 and R27 (TEMP_REG3/TEMP_REG4) are also
+ * held back when a block macro in the design uses them.
  */
 
 // Constants for register allocation
@@ -72,6 +73,8 @@ let pinnedRegisters = [];          // {block, field, token, firstByte, bytes} fo
 let pinnedRegisterConflicts = [];  // two pins that claim the same byte, reported by validation as an ERROR
 let pinnedProblems = [];           // {block, field, token, why} typed registers that are not a usable register window (ERROR in validation)
 let pinnedByteCount = 0;           // bytes of the pool removed by pins
+let scratchRegisterBytes = 0;      // bytes of the pool held for macro scratch registers TEMP_REG3 (R26) / TEMP_REG4 (R27)
+let scratchRegistersUsed = [];     // the scratch registers ("TEMP_REG3", "TEMP_REG4") some block macro in the design uses
 let poolAfterPins = [];            // pruByteArray right after the architectural windows and the pins were removed (free-register suggestion)
 
 /**
@@ -96,6 +99,36 @@ function isIntendedHandOff(a, b) {
     if (a.block === b.block) return false;
     const pair = [a.role, b.role].sort().join("+");
     return pair === "r+w" || pair === "r+r" || pair === "rm+w";
+}
+
+/**
+ * TEMP_REG3 / TEMP_REG4 are the macro scratch registers R26 / R27. They sit inside the allocatable range, so a design whose
+ * macros use them must not also keep values there: the macro would overwrite a live value, or its own result. Removes R26
+ * and/or R27 from the pool when any block's macro text names TEMP_REG3 / TEMP_REG4. Designs that use neither keep the full pool.
+ * Must run after the pool is created and before anything is allocated.
+ */
+function reserveMacroScratchRegisters() {
+    scratchRegisterBytes = 0;
+    scratchRegistersUsed = [];
+    const scratch = [["TEMP_REG3", 26], ["TEMP_REG4", 27]];
+    const found = {};
+    for (const moduleName in systemModules) {
+        const module = systemModules[moduleName];
+        if (!module || typeof module.getMacro !== "function") continue;
+        for (const instance of module.$instances || []) {
+            if (!instance || !instance.opCode) continue;
+            let body = "";
+            try { body = String(module.getMacro("", instance.opCode) || ""); } catch (e) { body = ""; }
+            for (const [name] of scratch) if (new RegExp("\\b" + name + "\\b").test(body)) found[name] = true;
+        }
+    }
+    for (const [name, reg] of scratch) {
+        if (!found[name]) continue;
+        scratchRegistersUsed.push(name);
+        for (let b = reg * numOfBytesPerRegister; b < (reg + 1) * numOfBytesPerRegister && b < totalBytes; b++) {
+            if (pruByteArray[b] === 0) { pruByteArray[b] = 1; scratchRegisterBytes++; }
+        }
+    }
 }
 
 /**
@@ -368,6 +401,8 @@ function recordAllocationFailure(instance, numOfBytes, what, contractFailure) {
         contractFailure: contractFailure === true,
         freeBytes: freeBytes,
         pinnedBytes: pinnedByteCount,
+        scratchBytes: scratchRegisterBytes,
+        scratchRegisters: scratchRegistersUsed.slice(),
         pinnedBy: pinnedRegisters.filter(p => p.reserved && p.firstByte < totalBytes).map(p => p.block + "." + p.field + "=" + p.token),
         budgetRegisters: numOfPruRegisters,
         budgetBytes: totalBytes
@@ -490,7 +525,7 @@ function outputRegisterNotations(entry) {
 
 /**
  * Register token a consumer reads for input <inputPort> wired to the source port named by `conn`.
- * Returns the source output port's own register; a missing/malformed port name or a port that owns no register is
+ * Returns the source output port's own register (lo and hi registers for a port wider than 4 bytes); a missing/malformed port name or a port that owns no register is
  * recorded in unroutedConnections (so validation names the block and port) and yields a token that cannot assemble,
  * because silently substituting output1's register would assemble into wrong code.
  */
@@ -508,6 +543,8 @@ function sourceRegisterToken(consumer, inputPort, conn) {
         unroutedConnections.push({ consumer: consumer.$name, inputPort: inputPort, source: source.$name, sourcePort: "output" + port });
         return "UNROUTED_" + source.$name + "_output" + port;
     }
+    // a 64-bit port is two consecutive registers (lo, hi), as for output1
+    if (alloc.numBytes > 4) return getPruRegister(alloc.byteOffset, 4) + " , " + getPruRegister(alloc.byteOffset + 4, 4);
     return getPruRegister(alloc.byteOffset, alloc.numBytes);
 }
 
@@ -1422,7 +1459,9 @@ function pushInstruction(instance, parentInstance) {
                     }
                     moduleInstanceRegisterMap[instanceName]["byteOffsetOfOutput" + output] = extraOffset;
                     moduleInstanceRegisterMap[instanceName]["numOfBytesReqByOutput" + output] = width;
-                    macroOutputRegisters.push(getPruRegister(extraOffset, width));
+                    macroOutputRegisters.push(width > 4
+                        ? getPruRegister(extraOffset, 4) + ", " + getPruRegister(extraOffset + 4, 4)
+                        : getPruRegister(extraOffset, width));
                 }
             }
 
@@ -1516,6 +1555,7 @@ function allocatePruRegisters() {
     } catch(e) { /* capsule unavailable in test stub */ }
 
     // user-typed registers the blocks emit verbatim leave the pool before anything is allocated
+    reserveMacroScratchRegisters();
     reservePinnedRegisters();
     loopCounterRegisters = {};  // Reset loop counter tracking
     groupReturnAddrByteOffset = -1;  // Reset group return address register
@@ -1869,6 +1909,8 @@ function getRegisterAllocationComments() {
     }
     comments.push("; TEMP_REG1 (R28) -> Used by all macros");
     comments.push("; TEMP_REG2 (R29) -> Used by all macros");
+    if (scratchRegistersUsed.includes("TEMP_REG3")) comments.push("; TEMP_REG3 (R26) -> Used by some macros; not allocated to values");
+    if (scratchRegistersUsed.includes("TEMP_REG4")) comments.push("; TEMP_REG4 (R27) -> Used by some macros; not allocated to values");
 
     // Add overall peak cycles summary
     comments.push(";");
@@ -1934,6 +1976,7 @@ exports = {
     sourcePortNumber,
     getUnroutedConnections: () => unroutedConnections,
     getAllocationFailures: () => allocationFailures,
+    getScratchRegisters: () => scratchRegistersUsed,
     getPinnedRegisters: () => pinnedRegisters,
     getPinnedRegisterConflicts: getPinnedConflictsClassified,
     suggestFreeRegister,

@@ -163,6 +163,17 @@ test('a master that clocks faster than f_max is refused by the device', () => {
         'overclocked firmware must be refused: ' + JSON.stringify(enc.faults()));
 });
 
+test('the first R31 read sees the idle level of the attached bus, not zero', () => {
+    const enc = models.createDeviceModel('ssi', { primary: 1, clock: 0 }, {
+        bits: 4, position: 0b1011, gray: false, min_clk_period_cycles: 4, monoflop_cycles: 200
+    });
+    const bus = attachBus([enc]);
+    const { pruState, r31ValueHistory } = runSim(['mov R4, R31', 'halt'], [0, 0], 10, bus);
+    assert.ok(r31ValueHistory[0] !== 0, 'R31 history must start from the settled bus: ' + r31ValueHistory[0]);
+    assert.strictEqual(pruState.registers[4], r31ValueHistory[0]);
+    assert.ok((pruState.registers[4] >> 1) & 1, 'an idle SSI data line reads high');
+});
+
 test('without a device, R31 stays whatever the fixed history says (open loop unchanged)', () => {
     const { pruState } = runSim(SSI_MASTER, SSI_MASTER_LABELS, 300, null);
     // No device: DATA reads 0 throughout, so R4 shifts in zeros.

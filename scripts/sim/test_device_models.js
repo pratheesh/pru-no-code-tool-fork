@@ -218,6 +218,30 @@ test('ssi: clocking faster than f_max is a fault, not garbage', () => {
         'overclocking must fault: ' + JSON.stringify(enc.faults()));
 });
 
+test('ssi: frames of 32 and 40 bits carry every bit of the position', () => {
+    for (const [bits, position, gray] of [[32, 0xDEADBEEF, false], [32, 0xDEADBEEF, true],
+                                           [40, 0xA5C3E1F0B2, false], [40, 0xA5C3E1F0B2, true]]) {
+        const enc = new models.SsiEncoder({ clkPin: 0, dataPin: 1, bits, position,
+                                            minClkPeriodCycles: 10, monoflopCycles: 100, gray });
+        const script = ssiClockScript(0, bits + 1, 30, 10);
+        const { r31Trace } = runOnBus(enc, script, 10 + (bits + 1) * 30 + 50);
+        let prevClk = 1, word = BigInt(0), sampled = 0;
+        for (let c = 1; c < r31Trace.length; c++) {
+            const clk = r31Trace[c] & 1;
+            if (clk === 1 && prevClk === 0 && sampled < bits) {
+                word = (word << BigInt(1)) | BigInt((r31Trace[c] >> 1) & 1);
+                sampled++;
+            }
+            prevClk = clk;
+        }
+        const raw = BigInt(position);
+        const expected = gray ? raw ^ (raw >> BigInt(1)) : raw;
+        assert.strictEqual(sampled, bits, 'frame not clocked');
+        assert.strictEqual(word, expected, `bits=${bits} gray=${gray}: got ${word.toString(16)}`);
+        assert.strictEqual(enc.faults().length, 0, JSON.stringify(enc.faults()));
+    }
+});
+
 test('ssi: a mid-word stall aborts the transfer and faults', () => {
     const enc = new models.SsiEncoder({ clkPin: 0, dataPin: 1, bits: 13,
                                         position: 42, minClkPeriodCycles: 10,

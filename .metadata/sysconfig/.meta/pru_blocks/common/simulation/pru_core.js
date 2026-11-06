@@ -1678,30 +1678,21 @@ function executeInstruction(pruState, pruInstructions, labelMap, r30ValueHistory
             break;
         }
 
-        case 'ZERO': {
-            const op1Info = parseRegisterReference(operands[0].replace(/&|,/g, ''));
-            const byteCountStr = operands[1] ? operands[1].replace(/,/g, '') : "4";
-            const byteCount = parseImmediate(byteCountStr);
-            if (op1Info) {
-                const startReg = (op1Info.regNum !== undefined) ? op1Info.regNum : op1Info.reg;
-                const numRegs = Math.ceil(byteCount / 4);
-                for (let i = 0; i < numRegs && (startReg + i) < 32; i++) {
-                    pruState.registers[startReg + i] = 0;
-                }
-            }
-            pruState.pc++;
-            break;
-        }
-
+        case 'ZERO':
         case 'FILL': {
             const op1Info = parseRegisterReference(operands[0].replace(/&|,/g, ''));
             const byteCountStr = operands[1] ? operands[1].replace(/,/g, '') : "4";
             const byteCount = parseImmediate(byteCountStr);
             if (op1Info) {
-                const startReg = (op1Info.regNum !== undefined) ? op1Info.regNum : op1Info.reg;
-                const numRegs = Math.ceil(byteCount / 4);
-                for (let i = 0; i < numRegs && (startReg + i) < 32; i++) {
-                    pruState.registers[startReg + i] = 0xFFFFFFFF;
+                // The operand names the first byte (Rn, Rn.bK or Rn.wK); the count covers
+                // exactly that many bytes of the register file, little-endian, and no more.
+                const startByte = op1Info.regNum * 4 +
+                    (op1Info.byteMode ? op1Info.bytePos : op1Info.wordMode ? op1Info.wordPos : 0);
+                const fillByte = opcode === 'FILL' ? 0xFF : 0x00;
+                for (let b = startByte; b < startByte + byteCount && b < 32 * 4; b++) {
+                    const shift = (b % 4) * 8;
+                    const r = b >> 2;
+                    pruState.registers[r] = ((pruState.registers[r] & ~(0xFF << shift)) | (fillByte << shift)) >>> 0;
                 }
             }
             pruState.pc++;
@@ -1987,10 +1978,13 @@ function simulatePruInstructions(pruInstructions, pruInstructionsLabels, cycleCo
     // generated. Open-loop runs (no bus) keep the historical zero start.
     if (deviceBus) {
         pruState.registers[30] = deviceBus.idlePruWord();
+        // Resolve the bus once at startup, so the firmware's first R31 read sees the
+        // level the devices and pull-ups give the idle R30, not a cold zero.
+        pruState.registers[31] = deviceBus.settle(0, pruState.registers[30]);
     }
 
     const r30ValueHistory = [deviceBus ? deviceBus.idlePruWord() : 0];
-    const r31ValueHistory = [0];
+    const r31ValueHistory = [pruState.registers[31]];
 
     // Create label map for jumps
     const labelMap = {};
