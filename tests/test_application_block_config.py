@@ -108,3 +108,22 @@ def test_ssi_payload_must_fit_the_frame_after_parity_and_error_bits(fields, vali
     assert (errors == []) == valid, errors
     if not valid:
         assert [e[1] for e in errors] == ["singleTurnBits"]
+
+
+def ipc_errors(name):
+    return node_eval("ipc_shared_mem_block", {"variableName": name}, "(m.validate(i,v),errors)")
+
+
+def test_ipc_default_variable_name_is_valid():
+    assert ipc_errors("encoder_data") == []
+
+
+@pytest.mark.parametrize("name", ["", "   ", "1data", "my-var", "my var", "a.b", " lead"])
+def test_ipc_blank_or_malformed_variable_name_is_a_validation_error(name):
+    """A blank name reached the macro as an empty operand and only failed at assembly."""
+    assert [e[1] for e in ipc_errors(name)] == ["variableName"]
+
+
+@pytest.mark.parametrize("name", ["_x", "X1", "shared_write_2"])
+def test_ipc_identifier_names_are_accepted(name):
+    assert ipc_errors(name) == []

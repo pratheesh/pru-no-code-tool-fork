@@ -8,6 +8,12 @@ function validate(inst, report) {
             reservedNames.validateSymbolField(inst, report, "variableName", "This symbol is emitted as a .usect reservation label and referenced by the block macro.");
         }
     }
+    // The name is also the operand of the macro (ldi32 .., VAR_NAME), so a blank or malformed name only fails at assembly.
+    if (!inst.variableName || String(inst.variableName).trim() === "") {
+        report.logError("Variable name cannot be empty", inst, "variableName");
+    } else if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(inst.variableName)) {
+        report.logError("Variable name must start with a letter or underscore and contain only letters, numbers, and underscores", inst, "variableName");
+    }
 }
 
 const ipcSharedMemModule = {
