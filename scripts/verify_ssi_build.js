@@ -11,7 +11,7 @@ const macro=ssi.getMacro('m_ssi_read','m_ssi_read');
 // replaces the block macro so a test can push a same-line-label body through
 // the production expanded-macro formatAsmLine site.
 function buildAsmText(extraLines, macroOverride){
-  const expanded=expand(macroOverride||macro,{RES:'R4',TOTAL_WIDTH:'25',ST_BITS:'13',MT_BITS:'12',CLK_PIN:'0',DATA_PIN:'1',CPOL:'0',HALF_PERIOD:'4',MONO_CYCLES:'8',PARITY_EN:'1',PARITY_TYPE:'0',ERR_EN:'1',GRAY_EN:'1',TIMEOUT_CYCLES:'50'});
+  const expanded=expand(macroOverride||macro,{RES:'R4',STATUS:'R5',TOTAL_WIDTH:'25',ST_BITS:'13',MT_BITS:'12',CLK_PIN:'0',DATA_PIN:'1',CPOL:'0',HALF_PERIOD:'4',MONO_CYCLES:'8',PARITY_EN:'1',PARITY_TYPE:'0',ERR_EN:'1',GRAY_EN:'1',TIMEOUT_CYCLES:'50'});
   return ['    ','    .text','    .global main','main:'].concat(expanded.split('\n').map(formatAsmLine)).concat((extraLines||[]).map(formatAsmLine)).concat(['    halt','    .end']).join('\n');
 }
 // the require.main body factored into main() with an
