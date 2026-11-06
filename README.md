@@ -393,7 +393,7 @@ node scripts/check_syscfg_arity.js
 
 Environment variables read by the tests that build and run firmware:
 
-- `SYSCFG_PATH`: SysConfig 1.28 installation (default `sysconfig_1.28.0` under `TOOLS_PATH`, as in `imports.mak.default`)
+- `SYSCFG_PATH`: SysConfig 1.28 installation. When it is not set, the tests look for `sysconfig_1.28.0` under `TOOLS_PATH`. `imports.mak.default` sets a different default (`sysconfig_1.26.2`) for the `gmake` builds, so set `SYSCFG_PATH` in `imports.mak` to the same 1.28 installation to build with the version the tests use
 - `CGT_TI_PRU_PATH`: TI PRU code generation tools 2.3.3 (clpru)
 - `PRU_SIMULATOR_PATH`: a checkout of [TI pru-simulator](https://github.com/TexasInstruments/pru-simulator)
 
