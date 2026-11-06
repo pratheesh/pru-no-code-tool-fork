@@ -1978,10 +1978,13 @@ function simulatePruInstructions(pruInstructions, pruInstructionsLabels, cycleCo
     // generated. Open-loop runs (no bus) keep the historical zero start.
     if (deviceBus) {
         pruState.registers[30] = deviceBus.idlePruWord();
+        // Resolve the bus once at startup, so the firmware's first R31 read sees the
+        // level the devices and pull-ups give the idle R30, not a cold zero.
+        pruState.registers[31] = deviceBus.settle(0, pruState.registers[30]);
     }
 
     const r30ValueHistory = [deviceBus ? deviceBus.idlePruWord() : 0];
-    const r31ValueHistory = [0];
+    const r31ValueHistory = [pruState.registers[31]];
 
     // Create label map for jumps
     const labelMap = {};
