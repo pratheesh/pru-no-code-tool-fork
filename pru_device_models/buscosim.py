@@ -16,7 +16,7 @@ Trace = Iterable[Tuple[int, int]]
 
 
 # ---------------------------------------------------------------- quadrature
-_FWD = {0: 1, 1: 3, 3: 2, 2: 0}
+_FWD = {0: 2, 2: 3, 3: 1, 1: 0}   # A leads B on forward motion
 _REV = {v: k for k, v in _FWD.items()}
 
 
