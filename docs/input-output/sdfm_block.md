@@ -18,14 +18,13 @@ The SDFM block retrieves digital current or voltage measurements from a Sigma-De
 | Parameter | Description | Default | Options |
 |-----------|-------------|---------|---------|
 | Filter Channel | The hardware SDFM channel to query | `0` | `0`, `1`, `2`, `3` |
-| Over Sampling Ratio (OSR) | Decimation depth controlling filter precision | `64` | `32`, `64`, `128`, `256` |
 | Output Port | The 32-bit destination register | `output1` | Automatic register |
 
 ### How It Works
 
-The block queries the SDFM peripheral's data register mapping. Based on the selected channel, it reads the memory-mapped register space and extracts the filtered value:
-$$\text{Offset} = \text{SDFM\_BASE} + (\text{Channel} \times 0x10) + 0x0C$$
-The PRU issues a load instruction to read this register and outputs the data.
+The block reads one 32-bit result register per channel. It does not configure the SDFM filter: the oversampling ratio and the other filter settings are not part of the block and must be set up elsewhere.
+$$\text{Address} = \texttt{0x0C080000} + (\text{Channel} \times 4)$$
+The PRU issues one load from this address (the whole macro takes 10 cycles) and outputs the data. The base address and the per-channel stride are assumptions made in the macro, not values taken from a register map; check them against the device documentation before relying on the block on hardware.
 
 ### Important Notes
 

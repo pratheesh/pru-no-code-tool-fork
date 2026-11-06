@@ -11,14 +11,15 @@ The IQMath Park/Clarke block performs reference frame transformations essential 
 - Supports both Forward transform (Clarke and Park) and Inverse transform (Inverse Park and Clarke) modes
 - Implementation using PRU ALU shifts and additions
 - Employs a pre-calculated 256-entry sine lookup table (`sine_lut`) in PRU memory
-- The default forward macro executes in 97 cycles (109 assembled instructions)
+- Two output ports: `output1` and `output2` (D and Q for the forward transform; the first two phase outputs for the inverse transform)
+- The default forward macro executes in 98 cycles
 
 ### Configuration
 
 | Parameter | Description | Options |
 |-----------|-------------|---------|
 | Transform Type | The direction of vector calculation | `Forward`, `Inverse` |
-| Number of Cycles | Cycle count reported for the block | Default: `97` |
+| Number of Cycles | Cycle count reported for the block | Default: `98` |
 
 ### How It Works
 
@@ -34,10 +35,10 @@ The IQMath Park/Clarke block performs reference frame transformations essential 
 1. **Inverse Park Transform**: Translates rotating voltages ($V_d$, $V_q$) back to static orthogonal components ($V_\alpha$, $V_\beta$):
    $$V_\alpha = V_d\cos(\theta) - V_q\sin(\theta)$$
    $$V_\beta = V_d\sin(\theta) + V_q\cos(\theta)$$
-2. **Inverse Clarke Transform**: Projects the static components to 3-phase outputs ($V_a$, $V_b$, $V_c$):
+2. **Inverse Clarke Transform**: Projects the static components to the first two phase outputs ($V_a$, $V_b$), written to `output1` and `output2`:
    $$V_a = V_\alpha$$
    $$V_b = -\frac{1}{2}V_\alpha + \frac{\sqrt{3}}{2}V_\beta$$
-   $$V_c = -V_a - V_b$$
+   The block has no third output port. If the third phase is needed, compute $V_c = -V_a - V_b$ with an arithmetic block.
 
 ### Important Notes
 
