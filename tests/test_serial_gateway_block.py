@@ -92,17 +92,18 @@ class _Idle:
         return 0
 
 
-def mailbox_data(write_ptr, read_ptr, payload_words):
-    """.data image: padding up to MB_BASE, then pointers and SLOTS slots (slot 0 = payload)."""
-    slot0 = struct.pack("<%dI" % (SLOT_BYTES // 4), *payload_words)
-    rest = bytes([FILL]) * (SLOT_BYTES * (SLOTS - 1))
-    image = struct.pack("<II", write_ptr, read_ptr) + slot0 + rest
-    return "\n".join(["    .data", "    .space %d" % MB_BASE,
-                      "    .byte " + ",".join(str(b) for b in image)])
+def mailbox_init(write_ptr, read_ptr, payload_words):
+    """Instructions that lay the mailbox into data memory: pointers, slot 0 = payload, the
+    other slots filled with FILL (a .data image is not loaded at this offset)."""
+    words = [write_ptr, read_ptr] + list(payload_words) +         [FILL * 0x01010101] * (SLOT_BYTES // 4 * (SLOTS - 1))
+    lines = ["    ldi32   R11, %d" % MB_BASE]
+    for w in words:
+        lines += ["    ldi32   R10, %d" % w, "    sbbo    &R10, R11, 0, 4", "    add     R11, R11, 4"]
+    return lines
 
 
 def run_mailbox(write_ptr, read_ptr, payload_words, **call_kw):
-    asm = program([call(**call_kw)], mailbox_data(write_ptr, read_ptr, payload_words))
+    asm = program(mailbox_init(write_ptr, read_ptr, payload_words) + [call(**call_kw)])
     holder = {}
     with tempfile.TemporaryDirectory(prefix="gw_") as wd:
         elf = elf_cosim.compile_asm(asm, wd, "mb")
@@ -115,3 +116,11 @@ def run_mailbox(write_ptr, read_ptr, payload_words, **call_kw):
 
 
 PAYLOAD = [0xA0000000 + i for i in range(SLOT_BYTES // 4)]
+
+
+@needs_ti
+def test_pending_command_advances_the_read_pointer_and_keeps_r30_r31_clean():
+    regs, (wr, rd), _mem = run_mailbox(1, 0, PAYLOAD)
+    assert rd == 1, "read pointer (mailbox word 1) must advance past the consumed slot"
+    assert regs[30] == 0, "payload data reached R30: %#x" % regs[30]
+    assert regs[31] == 0, "payload data reached R31: %#x" % regs[31]
