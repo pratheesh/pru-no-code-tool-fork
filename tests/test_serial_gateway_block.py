@@ -124,3 +124,12 @@ def test_pending_command_advances_the_read_pointer_and_keeps_r30_r31_clean():
     assert rd == 1, "read pointer (mailbox word 1) must advance past the consumed slot"
     assert regs[30] == 0, "payload data reached R30: %#x" % regs[30]
     assert regs[31] == 0, "payload data reached R31: %#x" % regs[31]
+
+
+@needs_ti
+def test_rx_publish_writes_only_the_status_word_into_the_slot():
+    regs, _ptrs, mem = run_mailbox(0, 0, [FILL * 0x01010101] * (SLOT_BYTES // 4))
+    slot = mem[8:8 + SLOT_BYTES]
+    assert struct.unpack_from("<I", slot, 0)[0] == regs[4] != FILL * 0x01010101
+    assert slot[4:] == bytes([FILL]) * (SLOT_BYTES - 4), \
+        "bytes after the status word were overwritten with other registers"
