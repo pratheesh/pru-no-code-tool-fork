@@ -276,3 +276,35 @@ def test_generated_design_calls_the_macro_of_its_core_and_assembles(core, tmp_pa
                  "-o", "main.out"]):
         c = subprocess.run([elf_cosim.find_clpru()] + cmd, cwd=out, text=True, capture_output=True)
         assert c.returncode == 0 and "warning" not in (c.stdout + c.stderr).lower(), c.stdout + c.stderr
+
+
+# --- turnaround: TURN_BITS bit periods of the selected COM rate between the last TX bit and RX enable ---
+COM_CLK_DIV = {"COM1": (4800, 39999, 4999), "COM2": (38400, 4999, 624), "COM3": (230400, 832, 103)}
+
+
+@pytest.mark.parametrize("com", sorted(COM_CLK_DIV))
+def test_turnaround_lasts_the_configured_number_of_bit_periods(com):
+    baud, tx_div, rx_div = COM_CLK_DIV[com]
+    arms = []
+
+    def watch(sim, core):
+        perif = sim._perif[core]
+        channel = perif.channels[0]
+        orig = channel.arm_rx
+
+        def arm(enabled):
+            if enabled and not channel.rx_en:
+                arms.append(perif._now_ns)
+            orig(enabled)
+        channel.arm_rx = arm
+
+    turn_bits = 5
+    r = run_macro("pru0", max_steps=3000000, device=watch, CLK_DIV=str(tx_div), RX_CLK_DIV=str(rx_div),
+                  RX_BYTES="1", TURN_BITS=str(turn_bits))
+    assert r.halted and arms
+    tx_end = drive_windows(r.channel())[-1][1]
+    bit_ns = 1e9 / baud
+    turnaround = arms[0] - tx_end
+    # The wait is TURN_BITS bit periods; the register setup before the receiver is armed adds a
+    # fraction of a microsecond, and the delay loop rounds to whole iterations.
+    assert turn_bits * bit_ns * 0.99 <= turnaround <= turn_bits * bit_ns * 1.01 + 1500, (turnaround, turn_bits * bit_ns)

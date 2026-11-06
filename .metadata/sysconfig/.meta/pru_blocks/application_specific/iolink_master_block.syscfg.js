@@ -500,19 +500,17 @@ var iolinkModule = {
 
         // ---- Phase 5: Turnaround ----
         lines.push("    ; ======== Phase 5: Turnaround ========");
-        lines.push("    ; Wait TURN_BITS bit periods via nested delay loop");
-        lines.push("    ; Inner: ~174 iterations per bit (calibrated for COM3 @ 230.4k)");
+        lines.push("    ; Wait TURN_BITS bit periods: the bit period in PRU cycles is (CLK_DIV + 1) / 192 MHz");
+        lines.push("    ; at the 200 MHz PRU clock = (CLK_DIV + 1) * 25 / 24 cycles; the delay loop (sub, qbne)");
+        lines.push("    ; takes 2 cycles per iteration, so one bit period is (CLK_DIV + 1) * 25 / 48 iterations.");
         lines.push("    ldi     TEMP_REG1.w0, TURN_BITS");
-        lines.push("    ldi     TEMP_REG2.w0, 174");
-        lines.push("m_iolink_turn_check?:");
-        lines.push("    sub     TEMP_REG1.w0, TEMP_REG1.w0, 1");
-        lines.push("    qbeq    m_iolink_turn_done?, TEMP_REG1.w0, 0");
-        lines.push("    mov     TEMP_REG4.w0, TEMP_REG2.w0");
+        lines.push("m_iolink_turn_bit?:");
+        lines.push("    ldi     TEMP_REG2.w0, (CLK_DIV + 1) * 25 / 48");
         lines.push("m_iolink_turn_inner?:");
-        lines.push("    sub     TEMP_REG4.w0, TEMP_REG4.w0, 1");
-        lines.push("    qbne    m_iolink_turn_inner?, TEMP_REG4.w0, 0");
-        lines.push("    qbne    m_iolink_turn_check?, TEMP_REG1.w0, 1");
-        lines.push("m_iolink_turn_done?:");
+        lines.push("    sub     TEMP_REG2.w0, TEMP_REG2.w0, 1");
+        lines.push("    qbne    m_iolink_turn_inner?, TEMP_REG2.w0, 0");
+        lines.push("    sub     TEMP_REG1.w0, TEMP_REG1.w0, 1");
+        lines.push("    qbne    m_iolink_turn_bit?, TEMP_REG1.w0, 0");
         lines.push("    nop");
         lines.push("    nop");
 
