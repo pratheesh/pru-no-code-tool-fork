@@ -176,3 +176,28 @@ def test_trigger_router_delay_uses_a_temporary_register():
         body = code(expand_macro("trigger_router_block", args))
         used = {m for l in body for m in re.findall(r"\bR\d+\b", l)}
         assert used <= {"R28", "R29", "R31"}, (routes, used)
+
+
+# ------------------------------------------------------------ run_headless_json.js
+
+HEADLESS = ROOT / "scripts" / "run_headless_json.js"
+
+
+def run_headless(*args):
+    return subprocess.run(["node", str(HEADLESS), *args], cwd=str(ROOT),
+                          capture_output=True, text=True, timeout=60)
+
+
+def test_headless_runner_rejects_an_elf_without_instructions():
+    proc = run_headless("--elf", str(ROOT / "no_such_firmware.out"))
+    assert proc.returncode == 1
+    err = json.loads(proc.stderr.strip())
+    assert err["status"] == "error"
+    assert "No instructions provided" in err["error"]
+    assert "--elf" in err["error"]
+
+
+def test_headless_runner_still_runs_inline_instructions():
+    proc = run_headless("--inline", "ldi R1, 7", "--inline", "halt", "--cycles", "10")
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["registers"][1] == 7
