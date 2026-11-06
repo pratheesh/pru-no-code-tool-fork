@@ -1266,7 +1266,9 @@ function getDevicePadSharing(deviceData, coreName) {
 
     // 2. Raw JSON device data structure (ICSSM devices, stubs and test harnesses). ICSSG pads carry a
     // PRGx_PRUy_GPOn + PRGx_PRUy_GPIn pair; ICSSM pads carry one two-way PRx_PRUy_GPIOn signal.
-    const infos = deviceData.pinCommonInfos || {};
+    // No usable pin data from any source: report "unknown" (null), not "no pad is shared" (an empty set).
+    const infos = deviceData.pinCommonInfos;
+    if (!infos || typeof infos !== 'object' || Object.keys(infos).length === 0) return null;
     for (const info of Object.values(infos)) {
         if (!info || !info.pinModeInfo) continue;
         const sigs = new Set(info.pinModeInfo.map(m => m.signalName));
