@@ -48,7 +48,8 @@ const OPEN_DRAIN = deviceBus.OPEN_DRAIN;
 // alone.
 
 // Gray-coded (A, B) by position within the 4-state cycle.
-const QUAD_PHASES = [[0, 0], [1, 0], [1, 1], [0, 1]];
+// Forward motion has B lead A, matching the PRU firmware decoder.
+const QUAD_PHASES = [[0, 0], [0, 1], [1, 1], [1, 0]];
 
 class QuadratureEncoder {
     constructor(opts) {
